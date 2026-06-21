@@ -1,0 +1,530 @@
+"""
+fetch_hscodes.py — 获取 HS 编码数据
+
+优先从 GitHub 下载 CSV；如 URL 不可达，使用内置的 200+ 条真实 HS 编码列表。
+"""
+
+import json
+import os
+import urllib.request
+import urllib.error
+import csv
+import io
+import ssl
+
+URL = "https://raw.githubusercontent.com/trademl/hs-pricing/main/data/hs_codes.csv"
+OUTPUT_DIR = "output"
+OUTPUT_PATH = os.path.join(OUTPUT_DIR, "hs_codes.json")
+
+# ── 内置 HS 编码表（海关总署公开分类，200 条，覆盖 01–97 章） ──────────────
+BUILTIN_HS_CODES = [
+    # ── 第一类 活动物；动物产品 (01-05) ──
+    {"code": "010121", "description": "改良种用的马", "section": "活动物"},
+    {"code": "010221", "description": "改良种用的乳牛", "section": "活动物"},
+    {"code": "010229", "description": "其他牛（非改良种用）", "section": "活动物"},
+    {"code": "010290", "description": "其他牛", "section": "活动物"},
+    {"code": "010310", "description": "改良种用的猪", "section": "活动物"},
+    {"code": "010391", "description": "重量＜50kg 的活猪", "section": "活动物"},
+    {"code": "010392", "description": "重量≥50kg 的活猪", "section": "活动物"},
+    {"code": "010511", "description": "不超过 185g 的种用鸡", "section": "活动物"},
+    {"code": "020130", "description": "鲜或冷的去骨牛肉", "section": "肉及食用杂碎"},
+    {"code": "020220", "description": "冻的带骨牛肉", "section": "肉及食用杂碎"},
+    {"code": "020230", "description": "冻的去骨牛肉", "section": "肉及食用杂碎"},
+    {"code": "020321", "description": "冻的整头及半头猪", "section": "肉及食用杂碎"},
+    {"code": "020622", "description": "冻的猪肝", "section": "肉及食用杂碎"},
+    {"code": "020712", "description": "冻的整只鸡", "section": "肉及食用杂碎"},
+    {"code": "020714", "description": "冻的鸡块及杂碎", "section": "肉及食用杂碎"},
+    {"code": "030212", "description": "鲜或冷的大麻哈鱼", "section": "鱼及水生动物"},
+    {"code": "030232", "description": "鲜或冷的黄鳍金枪鱼", "section": "鱼及水生动物"},
+    {"code": "030343", "description": "冻的鲣鱼", "section": "鱼及水生动物"},
+    {"code": "030462", "description": "冻的鲶鱼类鱼片", "section": "鱼及水生动物"},
+    {"code": "030614", "description": "冻的带壳蟹", "section": "鱼及水生动物"},
+    {"code": "030812", "description": "冻的牡蛎", "section": "鱼及水生动物"},
+    {"code": "040110", "description": "脂肪含量≤1%的未浓缩乳", "section": "乳品及蛋品"},
+    {"code": "040210", "description": "脂肪含量≤1.5%的奶粉", "section": "乳品及蛋品"},
+    {"code": "040221", "description": "脂肪含量＞1.5%的未加糖奶粉", "section": "乳品及蛋品"},
+    {"code": "040510", "description": "黄油", "section": "乳品及蛋品"},
+    {"code": "040700", "description": "带壳禽蛋", "section": "乳品及蛋品"},
+    {"code": "050400", "description": "动物肠、膀胱及胃", "section": "其他动物产品"},
+
+    # ── 第二类 植物产品 (06-14) ──
+    {"code": "060210", "description": "未扦插的插穗及接穗", "section": "活树及其他活植物"},
+    {"code": "060240", "description": "玫瑰", "section": "活树及其他活植物"},
+    {"code": "060290", "description": "其他活植物", "section": "活树及其他活植物"},
+    {"code": "070190", "description": "鲜或冷的其他马铃薯", "section": "食用蔬菜"},
+    {"code": "070200", "description": "鲜或冷的番茄", "section": "食用蔬菜"},
+    {"code": "070310", "description": "鲜或冷的洋葱及青葱", "section": "食用蔬菜"},
+    {"code": "070690", "description": "鲜或冷的胡萝卜及萝卜", "section": "食用蔬菜"},
+    {"code": "070999", "description": "鲜或冷的其他蔬菜", "section": "食用蔬菜"},
+    {"code": "080300", "description": "鲜或干的香蕉", "section": "食用水果及坚果"},
+    {"code": "080430", "description": "鲜或干的菠萝", "section": "食用水果及坚果"},
+    {"code": "080440", "description": "鲜或干的牛油果", "section": "食用水果及坚果"},
+    {"code": "080450", "description": "鲜或干的芒果、山竹、番石榴", "section": "食用水果及坚果"},
+    {"code": "080510", "description": "鲜或干的橙", "section": "食用水果及坚果"},
+    {"code": "080521", "description": "鲜或干的柑橘", "section": "食用水果及坚果"},
+    {"code": "080540", "description": "鲜或干的葡萄柚", "section": "食用水果及坚果"},
+    {"code": "080610", "description": "鲜的葡萄", "section": "食用水果及坚果"},
+    {"code": "080810", "description": "鲜的苹果", "section": "食用水果及坚果"},
+    {"code": "080910", "description": "鲜的杏", "section": "食用水果及坚果"},
+    {"code": "090111", "description": "未焙炒未浸除咖啡碱的咖啡", "section": "咖啡、茶及调味香料"},
+    {"code": "090121", "description": "已焙炒的咖啡", "section": "咖啡、茶及调味香料"},
+    {"code": "090210", "description": "绿茶（内包装≤3kg）", "section": "咖啡、茶及调味香料"},
+    {"code": "090411", "description": "未磨胡椒", "section": "咖啡、茶及调味香料"},
+    {"code": "100190", "description": "小麦及混合麦", "section": "谷物"},
+    {"code": "100510", "description": "种用玉米", "section": "谷物"},
+    {"code": "100590", "description": "其他玉米", "section": "谷物"},
+    {"code": "100610", "description": "带壳稻谷", "section": "谷物"},
+    {"code": "100630", "description": "精米", "section": "谷物"},
+    {"code": "110100", "description": "小麦或混合麦的细粉", "section": "制粉工业产品"},
+    {"code": "120190", "description": "其他大豆", "section": "含油籽仁及果实"},
+    {"code": "120510", "description": "低芥子酸油菜籽", "section": "含油籽仁及果实"},
+
+    # ── 第三类 动、植物油、脂 (15) ──
+    {"code": "150710", "description": "初榨豆油", "section": "动、植物油、脂"},
+    {"code": "150910", "description": "初榨橄榄油", "section": "动、植物油、脂"},
+    {"code": "151110", "description": "初榨棕榈油", "section": "动、植物油、脂"},
+    {"code": "151211", "description": "初榨葵花籽油", "section": "动、植物油、脂"},
+    {"code": "151710", "description": "人造黄油", "section": "动、植物油、脂"},
+
+    # ── 第四类 食品、饮料、酒及醋 (16-24) ──
+    {"code": "160100", "description": "肉制香肠", "section": "食品"},
+    {"code": "160232", "description": "鸡罐头", "section": "食品"},
+    {"code": "170199", "description": "其他蔗糖", "section": "糖及糖食"},
+    {"code": "170410", "description": "口香糖", "section": "糖及糖食"},
+    {"code": "180500", "description": "可可粉", "section": "可可及可可制品"},
+    {"code": "190531", "description": "甜饼干", "section": "谷物、糕点制品"},
+    {"code": "190590", "description": "面包、糕点及其他焙烘糕饼", "section": "谷物、糕点制品"},
+    {"code": "200520", "description": "非醋方法制作的马铃薯", "section": "蔬菜、水果制品"},
+    {"code": "200819", "description": "其他坚果及籽仁制品", "section": "蔬菜、水果制品"},
+    {"code": "200941", "description": "菠萝汁", "section": "蔬菜、水果制品"},
+    {"code": "210111", "description": "咖啡浓缩精汁", "section": "杂项食品"},
+    {"code": "210310", "description": "酱油", "section": "杂项食品"},
+    {"code": "210330", "description": "芥末面粉", "section": "杂项食品"},
+    {"code": "210690", "description": "其他食品配制品", "section": "杂项食品"},
+    {"code": "220210", "description": "加糖或甜物质的水", "section": "饮料、酒及醋"},
+    {"code": "220300", "description": "麦芽酿造的啤酒", "section": "饮料、酒及醋"},
+    {"code": "220421", "description": "葡萄酒（装瓶≤2L）", "section": "饮料、酒及醋"},
+    {"code": "220860", "description": "伏特加", "section": "饮料、酒及醋"},
+    {"code": "230990", "description": "其他动物饲料", "section": "食品工业残渣及饲料"},
+
+    # ── 第五类 矿产品 (25-27) ──
+    {"code": "250100", "description": "盐及纯氯化钠", "section": "盐、硫磺、土及石料"},
+    {"code": "251010", "description": "未碾磨磷酸盐", "section": "盐、硫磺、土及石料"},
+    {"code": "252310", "description": "水泥熟料", "section": "盐、硫磺、土及石料"},
+    {"code": "260111", "description": "未烧结铁矿砂", "section": "矿砂、矿渣"},
+    {"code": "260300", "description": "铜矿砂", "section": "矿砂、矿渣"},
+    {"code": "260400", "description": "镍矿砂", "section": "矿砂、矿渣"},
+    {"code": "260600", "description": "铝矿砂", "section": "矿砂、矿渣"},
+    {"code": "270112", "description": "烟煤", "section": "矿物燃料、矿物油"},
+    {"code": "270710", "description": "粗苯", "section": "矿物燃料、矿物油"},
+    {"code": "270900", "description": "石油原油", "section": "矿物燃料、矿物油"},
+    {"code": "271012", "description": "轻质石油馏分", "section": "矿物燃料、矿物油"},
+    {"code": "271019", "description": "其他石油燃料油", "section": "矿物燃料、矿物油"},
+    {"code": "271111", "description": "液化天然气", "section": "矿物燃料、矿物油"},
+    {"code": "271121", "description": "气态天然气", "section": "矿物燃料、矿物油"},
+
+    # ── 第六类 化学工业产品 (28-38) ──
+    {"code": "280461", "description": "纯度≥99.99%的硅", "section": "无机化学品"},
+    {"code": "281410", "description": "液氨", "section": "无机化学品"},
+    {"code": "283620", "description": "碳酸钠（纯碱）", "section": "无机化学品"},
+    {"code": "284700", "description": "过氧化氢", "section": "无机化学品"},
+    {"code": "290220", "description": "苯", "section": "有机化学品"},
+    {"code": "290241", "description": "邻二甲苯", "section": "有机化学品"},
+    {"code": "290250", "description": "苯乙烯", "section": "有机化学品"},
+    {"code": "290320", "description": "乙烯", "section": "有机化学品"},
+    {"code": "291736", "description": "对苯二甲酸", "section": "有机化学品"},
+    {"code": "300215", "description": "免疫制品（已配定剂量）", "section": "药品"},
+    {"code": "300490", "description": "其他药品（已配定剂量）", "section": "药品"},
+    {"code": "310210", "description": "尿素（肥料）", "section": "肥料"},
+    {"code": "310520", "description": "复合肥料", "section": "肥料"},
+    {"code": "320416", "description": "活性染料", "section": "颜料及漆料"},
+    {"code": "320611", "description": "钛白粉", "section": "颜料及漆料"},
+    {"code": "330300", "description": "香水及花露水", "section": "精油及化妆品"},
+    {"code": "330499", "description": "其他美容化妆品", "section": "精油及化妆品"},
+    {"code": "340111", "description": "盥洗用肥皂", "section": "洗涤剂及润滑剂"},
+    {"code": "340219", "description": "其他表面活性剂", "section": "洗涤剂及润滑剂"},
+    {"code": "350520", "description": "胶", "section": "蛋白类物质"},
+    {"code": "370130", "description": "摄影感光胶片", "section": "照相及电影用品"},
+    {"code": "380891", "description": "杀虫剂", "section": "杂项化学产品"},
+
+    # ── 第七类 塑料及其制品；橡胶及其制品 (39-40) ──
+    {"code": "390110", "description": "聚乙烯（比重＜0.94）", "section": "塑料及其制品"},
+    {"code": "390210", "description": "聚丙烯", "section": "塑料及其制品"},
+    {"code": "390311", "description": "可发性聚苯乙烯", "section": "塑料及其制品"},
+    {"code": "390410", "description": "聚氯乙烯", "section": "塑料及其制品"},
+    {"code": "390760", "description": "聚对苯二甲酸乙二酯（PET）", "section": "塑料及其制品"},
+    {"code": "392010", "description": "乙烯聚合物制薄膜", "section": "塑料及其制品"},
+    {"code": "392020", "description": "丙烯聚合物制薄膜", "section": "塑料及其制品"},
+    {"code": "392190", "description": "其他塑料板片膜", "section": "塑料及其制品"},
+    {"code": "392310", "description": "塑料制箱盒", "section": "塑料及其制品"},
+    {"code": "392410", "description": "塑料制餐具及厨房用具", "section": "塑料及其制品"},
+    {"code": "392690", "description": "其他塑料制品", "section": "塑料及其制品"},
+    {"code": "400110", "description": "天然橡胶乳", "section": "橡胶及其制品"},
+    {"code": "400122", "description": "技术分类天然橡胶（TSNR）", "section": "橡胶及其制品"},
+    {"code": "401110", "description": "机动小客车用轮胎", "section": "橡胶及其制品"},
+    {"code": "401120", "description": "客车或货车用轮胎", "section": "橡胶及其制品"},
+    {"code": "401699", "description": "其他橡胶制品", "section": "橡胶及其制品"},
+
+    # ── 第八类 生皮、皮革 (41-43) ──
+    {"code": "410411", "description": "全粒面牛革", "section": "生皮及皮革"},
+    {"code": "410712", "description": "牛马皮革（整张）", "section": "生皮及皮革"},
+    {"code": "420211", "description": "皮革制手提包", "section": "皮革制品及箱包"},
+    {"code": "420222", "description": "塑料片制手提包", "section": "皮革制品及箱包"},
+    {"code": "420310", "description": "皮革制衣服", "section": "皮革制品及箱包"},
+    {"code": "430310", "description": "毛皮制衣服", "section": "毛皮及人造毛皮"},
+
+    # ── 第九类 木及木制品 (44-46) ──
+    {"code": "440210", "description": "木炭", "section": "木及木制品"},
+    {"code": "440321", "description": "松木原木", "section": "木及木制品"},
+    {"code": "440341", "description": "柚木原木", "section": "木及木制品"},
+    {"code": "440711", "description": "松木锯材", "section": "木及木制品"},
+    {"code": "440729", "description": "热带木锯材", "section": "木及木制品"},
+    {"code": "441010", "description": "木制刨花板", "section": "木及木制品"},
+    {"code": "441112", "description": "中密度纤维板（MDF）", "section": "木及木制品"},
+    {"code": "441231", "description": "胶合板", "section": "木及木制品"},
+    {"code": "442110", "description": "木制衣架", "section": "木及木制品"},
+    {"code": "442191", "description": "其他木制品", "section": "木及木制品"},
+    {"code": "470321", "description": "针叶木化学木浆", "section": "木浆及纸板"},
+
+    # ── 第十类 纸及纸板 (47-49) ──
+    {"code": "480100", "description": "新闻纸", "section": "纸及纸板制品"},
+    {"code": "480255", "description": "书写纸（≥40g/m²）", "section": "纸及纸板制品"},
+    {"code": "480421", "description": "牛皮纸袋纸", "section": "纸及纸板制品"},
+    {"code": "481810", "description": "卫生纸", "section": "纸及纸板制品"},
+    {"code": "481910", "description": "瓦楞纸箱", "section": "纸及纸板制品"},
+    {"code": "482110", "description": "纸制标签", "section": "纸及纸板制品"},
+    {"code": "490199", "description": "其他书籍及印刷品", "section": "印刷品"},
+
+    # ── 第十一类 纺织原料及纺织制品 (50-63) ──
+    {"code": "500200", "description": "生丝", "section": "纺织原料"},
+    {"code": "510111", "description": "未梳含脂剪羊毛", "section": "纺织原料"},
+    {"code": "520100", "description": "未梳棉", "section": "纺织原料"},
+    {"code": "520511", "description": "棉单纱（粗支）", "section": "纺织原料"},
+    {"code": "520812", "description": "棉梭织物（≥100g/m²）", "section": "纺织原料"},
+    {"code": "540233", "description": "涤纶弹力丝", "section": "化学纤维长丝"},
+    {"code": "540742", "description": "尼龙梭织物", "section": "化学纤维长丝"},
+    {"code": "550320", "description": "聚酯短纤", "section": "化学纤维短纤"},
+    {"code": "551011", "description": "人造纤维短纤纱", "section": "化学纤维短纤"},
+    {"code": "560312", "description": "无纺织物（25-70g/m²）", "section": "特种织物"},
+    {"code": "570110", "description": "羊毛簇绒地毯", "section": "地毯及铺地制品"},
+    {"code": "580421", "description": "尼龙机织花边", "section": "特种织物"},
+    {"code": "600622", "description": "棉制针织布", "section": "针织物及钩编织物"},
+    {"code": "610910", "description": "棉制T恤衫", "section": "针织服装"},
+    {"code": "611020", "description": "棉制针织套头衫", "section": "针织服装"},
+    {"code": "620462", "description": "女式棉制长裤", "section": "非针织服装"},
+    {"code": "620520", "description": "棉制男衬衫", "section": "非针织服装"},
+    {"code": "620630", "description": "棉制女衬衫", "section": "非针织服装"},
+    {"code": "621210", "description": "棉制胸罩", "section": "非针织服装"},
+    {"code": "630231", "description": "棉制床上织物", "section": "其他纺织制品"},
+
+    # ── 第十二类 鞋、帽、伞 (64-67) ──
+    {"code": "640219", "description": "橡胶/塑料制运动鞋", "section": "鞋靴"},
+    {"code": "640299", "description": "其他橡胶/塑料鞋", "section": "鞋靴"},
+    {"code": "640319", "description": "皮革制运动鞋", "section": "鞋靴"},
+    {"code": "640399", "description": "其他皮革制鞋", "section": "鞋靴"},
+    {"code": "640411", "description": "旅游用运动鞋", "section": "鞋靴"},
+    {"code": "650400", "description": "编结帽", "section": "帽类"},
+    {"code": "650500", "description": "针织帽类", "section": "帽类"},
+    {"code": "660110", "description": "庭院用伞", "section": "伞、杖"},
+
+    # ── 第十三类 石料、陶瓷、玻璃 (68-71) ──
+    {"code": "680221", "description": "大理石及制品", "section": "石料及制品"},
+    {"code": "681011", "description": "水泥砖", "section": "石料及制品"},
+    {"code": "690100", "description": "陶瓷砖", "section": "陶瓷产品"},
+    {"code": "691010", "description": "陶瓷卫生洁具", "section": "陶瓷产品"},
+    {"code": "691110", "description": "瓷餐具", "section": "陶瓷产品"},
+    {"code": "700100", "description": "碎玻璃", "section": "玻璃及玻璃制品"},
+    {"code": "700529", "description": "浮法玻璃", "section": "玻璃及玻璃制品"},
+    {"code": "701090", "description": "玻璃瓶", "section": "玻璃及玻璃制品"},
+    {"code": "710812", "description": "非货币用金（金锭）", "section": "珍珠及贵金属"},
+    {"code": "710813", "description": "半制成金", "section": "珍珠及贵金属"},
+    {"code": "710820", "description": "非货币用银", "section": "珍珠及贵金属"},
+
+    # ── 第十四类 珠宝、贵金属 (71) ──
+    {"code": "711011", "description": "未加工铂", "section": "珍珠及贵金属"},
+    {"code": "711319", "description": "其他贵金属首饰", "section": "珍珠及贵金属"},
+
+    # ── 第十五类 贱金属及其制品 (72-83) ──
+    {"code": "720110", "description": "非合金生铁", "section": "钢铁"},
+    {"code": "720241", "description": "铬铁合金", "section": "钢铁"},
+    {"code": "720711", "description": "半制成品钢锭", "section": "钢铁"},
+    {"code": "720827", "description": "热轧卷材", "section": "钢铁"},
+    {"code": "720917", "description": "冷轧卷材", "section": "钢铁"},
+    {"code": "721030", "description": "镀锌板", "section": "钢铁"},
+    {"code": "721310", "description": "螺纹钢", "section": "钢铁"},
+    {"code": "721420", "description": "钢筋", "section": "钢铁"},
+    {"code": "722530", "description": "不锈钢热轧卷", "section": "钢铁"},
+    {"code": "722020", "description": "不锈钢冷轧板材", "section": "钢铁"},
+    {"code": "740311", "description": "精炼铜阴极", "section": "铜及其制品"},
+    {"code": "740319", "description": "精炼铜型材", "section": "铜及其制品"},
+    {"code": "740811", "description": "铜线", "section": "铜及其制品"},
+    {"code": "740911", "description": "铜板", "section": "铜及其制品"},
+    {"code": "760110", "description": "未锻轧非合金铝", "section": "铝及其制品"},
+    {"code": "760120", "description": "未锻轧铝合金", "section": "铝及其制品"},
+    {"code": "760611", "description": "铝板", "section": "铝及其制品"},
+    {"code": "760711", "description": "铝箔", "section": "铝及其制品"},
+    {"code": "790111", "description": "未锻轧锌", "section": "锌及其制品"},
+    {"code": "800110", "description": "未锻轧锡", "section": "锡及其制品"},
+    {"code": "811010", "description": "锑", "section": "其他贱金属"},
+    {"code": "820210", "description": "手工锯", "section": "贱金属工具"},
+    {"code": "820411", "description": "扳手", "section": "贱金属工具"},
+    {"code": "830120", "description": "机动车用锁", "section": "贱金属杂项制品"},
+
+    # ── 第十六类 机器及机械器具 (84-85) ──
+    {"code": "840734", "description": "汽车用往复式活塞发动机", "section": "核反应堆、锅炉、机械"},
+    {"code": "840820", "description": "柴油发动机", "section": "核反应堆、锅炉、机械"},
+    {"code": "840991", "description": "汽油发动机零件", "section": "核反应堆、锅炉、机械"},
+    {"code": "841330", "description": "燃油泵", "section": "核反应堆、锅炉、机械"},
+    {"code": "841370", "description": "离心泵", "section": "核反应堆、锅炉、机械"},
+    {"code": "841451", "description": "台扇、落地扇", "section": "核反应堆、锅炉、机械"},
+    {"code": "841810", "description": "冷藏冷冻组合机", "section": "核反应堆、锅炉、机械"},
+    {"code": "841920", "description": "医用消毒器", "section": "核反应堆、锅炉、机械"},
+    {"code": "842010", "description": "砑光机", "section": "核反应堆、锅炉、机械"},
+    {"code": "842121", "description": "净水器", "section": "核反应堆、锅炉、机械"},
+    {"code": "842230", "description": "瓶罐灌装机", "section": "核反应堆、锅炉、机械"},
+    {"code": "842481", "description": "农用喷雾器", "section": "核反应堆、锅炉、机械"},
+    {"code": "842810", "description": "升降机", "section": "核反应堆、锅炉、机械"},
+    {"code": "842919", "description": "推土机", "section": "核反应堆、锅炉、机械"},
+    {"code": "842952", "description": "机械铲（可旋转）", "section": "核反应堆、锅炉、机械"},
+    {"code": "843049", "description": "其他钻探机", "section": "核反应堆、锅炉、机械"},
+    {"code": "843710", "description": "种子分选机", "section": "核反应堆、锅炉、机械"},
+    {"code": "844311", "description": "胶印机", "section": "核反应堆、锅炉、机械"},
+    {"code": "844331", "description": "多功能打印复印机", "section": "核反应堆、锅炉、机械"},
+    {"code": "845011", "description": "全自动洗衣机", "section": "核反应堆、锅炉、机械"},
+    {"code": "845221", "description": "工业缝纫机", "section": "核反应堆、锅炉、机械"},
+    {"code": "845710", "description": "加工中心", "section": "核反应堆、锅炉、机械"},
+    {"code": "846291", "description": "金属挤压机", "section": "核反应堆、锅炉、机械"},
+    {"code": "846591", "description": "木材锯床", "section": "核反应堆、锅炉、机械"},
+    {"code": "847130", "description": "便携式自动数据处理设备", "section": "核反应堆、锅炉、机械"},
+    {"code": "847141", "description": "数据处理设备（带显示及键盘）", "section": "核反应堆、锅炉、机械"},
+    {"code": "847150", "description": "数据处理单元", "section": "核反应堆、锅炉、机械"},
+    {"code": "847170", "description": "存储设备", "section": "核反应堆、锅炉、机械"},
+    {"code": "847330", "description": "计算机零件", "section": "核反应堆、锅炉、机械"},
+    {"code": "847431", "description": "混凝土搅拌机", "section": "核反应堆、锅炉、机械"},
+    {"code": "847989", "description": "其他未列名机器", "section": "核反应堆、锅炉、机械"},
+    {"code": "848110", "description": "减压阀", "section": "核反应堆、锅炉、机械"},
+    {"code": "848180", "description": "其他阀门", "section": "核反应堆、锅炉、机械"},
+    {"code": "848210", "description": "滚珠轴承", "section": "核反应堆、锅炉、机械"},
+    {"code": "850110", "description": "微型电机（≤37.5W）", "section": "电机、电气设备"},
+    {"code": "850131", "description": "直流电机（≤750W）", "section": "电机、电气设备"},
+    {"code": "850152", "description": "多相交流电机", "section": "电机、电气设备"},
+    {"code": "850212", "description": "柴油发电机组", "section": "电机、电气设备"},
+    {"code": "850421", "description": "液体介质变压器", "section": "电机、电气设备"},
+    {"code": "850440", "description": "逆变器", "section": "电机、电气设备"},
+    {"code": "850650", "description": "锂电池", "section": "电机、电气设备"},
+    {"code": "850760", "description": "锂离子蓄电池", "section": "电机、电气设备"},
+    {"code": "851610", "description": "电热水器", "section": "电机、电气设备"},
+    {"code": "851640", "description": "电熨斗", "section": "电机、电气设备"},
+    {"code": "851650", "description": "微波炉", "section": "电机、电气设备"},
+    {"code": "851660", "description": "电饭锅", "section": "电机、电气设备"},
+    {"code": "851712", "description": "智能手机", "section": "电机、电气设备"},
+    {"code": "851718", "description": "其他电话机", "section": "电机、电气设备"},
+    {"code": "851762", "description": "通信设备（路由器、交换机等）", "section": "电机、电气设备"},
+    {"code": "851821", "description": "单喇叭音箱", "section": "电机、电气设备"},
+    {"code": "851830", "description": "耳机及耳塞", "section": "电机、电气设备"},
+    {"code": "851840", "description": "音频放大器", "section": "电机、电气设备"},
+    {"code": "851981", "description": "录音录像设备", "section": "电机、电气设备"},
+    {"code": "852351", "description": "固态存储设备", "section": "电机、电气设备"},
+    {"code": "852580", "description": "电视摄像机", "section": "电机、电气设备"},
+    {"code": "852691", "description": "导航设备", "section": "电机、电气设备"},
+    {"code": "852871", "description": "电视机顶盒", "section": "电机、电气设备"},
+    {"code": "853400", "description": "印刷电路板", "section": "电机、电气设备"},
+    {"code": "853610", "description": "熔断器", "section": "电机、电气设备"},
+    {"code": "853650", "description": "开关", "section": "电机、电气设备"},
+    {"code": "853669", "description": "插头及插座", "section": "电机、电气设备"},
+    {"code": "853710", "description": "电气控制柜", "section": "电机、电气设备"},
+    {"code": "853931", "description": "荧光灯", "section": "电机、电气设备"},
+    {"code": "854110", "description": "二极管", "section": "电机、电气设备"},
+    {"code": "854121", "description": "晶体管（≤1W）", "section": "电机、电气设备"},
+    {"code": "854231", "description": "集成电路（处理器及控制器）", "section": "电机、电气设备"},
+    {"code": "854232", "description": "存储器集成电路", "section": "电机、电气设备"},
+    {"code": "854239", "description": "其他集成电路", "section": "电机、电气设备"},
+    {"code": "854430", "description": "汽车线束", "section": "电机、电气设备"},
+    {"code": "854442", "description": "电线电缆（≤1000V）", "section": "电机、电气设备"},
+
+    # ── 第十七类 车辆、航空器、船舶 (86-89) ──
+    {"code": "870210", "description": "柴油客车（≥10座）", "section": "车辆及其零件"},
+    {"code": "870321", "description": "汽油小轿车（≤1000cc）", "section": "车辆及其零件"},
+    {"code": "870322", "description": "汽油小轿车（1000-1500cc）", "section": "车辆及其零件"},
+    {"code": "870323", "description": "汽油小轿车（1500-3000cc）", "section": "车辆及其零件"},
+    {"code": "870332", "description": "柴油小轿车（1500-2500cc）", "section": "车辆及其零件"},
+    {"code": "870410", "description": "自卸车", "section": "车辆及其零件"},
+    {"code": "870421", "description": "柴油货车（≤5吨）", "section": "车辆及其零件"},
+    {"code": "870431", "description": "汽油货车（≤5吨）", "section": "车辆及其零件"},
+    {"code": "870600", "description": "底盘（装有发动机）", "section": "车辆及其零件"},
+    {"code": "870710", "description": "车身", "section": "车辆及其零件"},
+    {"code": "870810", "description": "保险杠", "section": "车辆及其零件"},
+    {"code": "870829", "description": "车身冲压件", "section": "车辆及其零件"},
+    {"code": "870830", "description": "制动器及零件", "section": "车辆及其零件"},
+    {"code": "870840", "description": "变速箱", "section": "车辆及其零件"},
+    {"code": "870850", "description": "驱动桥", "section": "车辆及其零件"},
+    {"code": "870870", "description": "车轮及零件", "section": "车辆及其零件"},
+    {"code": "870891", "description": "散热器", "section": "车辆及其零件"},
+    {"code": "870892", "description": "消声器及排气管", "section": "车辆及其零件"},
+    {"code": "870893", "description": "离合器及零件", "section": "车辆及其零件"},
+    {"code": "870894", "description": "转向系统", "section": "车辆及其零件"},
+    {"code": "870899", "description": "其他汽车零配件", "section": "车辆及其零件"},
+    {"code": "871120", "description": "摩托车（50-250cc）", "section": "车辆及其零件"},
+    {"code": "871160", "description": "电动摩托车", "section": "车辆及其零件"},
+    {"code": "871200", "description": "自行车", "section": "车辆及其零件"},
+    {"code": "871491", "description": "自行车车架", "section": "车辆及其零件"},
+    {"code": "880220", "description": "飞机（空重≤2000kg）", "section": "航空器"},
+    {"code": "880240", "description": "飞机（空重＞15000kg）", "section": "航空器"},
+    {"code": "880529", "description": "运载火箭及航天器", "section": "航空器"},
+    {"code": "890110", "description": "客船", "section": "船舶"},
+    {"code": "890130", "description": "冷藏船", "section": "船舶"},
+    {"code": "890190", "description": "其他货船", "section": "船舶"},
+    {"code": "890200", "description": "渔船", "section": "船舶"},
+
+    # ── 第十八类 光学、医疗等仪器 (90-92) ──
+    {"code": "900110", "description": "光导纤维", "section": "光学及医疗仪器"},
+    {"code": "900130", "description": "隐形眼镜", "section": "光学及医疗仪器"},
+    {"code": "900211", "description": "照相机镜头", "section": "光学及医疗仪器"},
+    {"code": "900311", "description": "塑料制眼镜架", "section": "光学及医疗仪器"},
+    {"code": "900640", "description": "一次成像相机", "section": "光学及医疗仪器"},
+    {"code": "901210", "description": "电子显微镜", "section": "光学及医疗仪器"},
+    {"code": "901380", "description": "液晶显示装置", "section": "光学及医疗仪器"},
+    {"code": "901710", "description": "绘图仪", "section": "光学及医疗仪器"},
+    {"code": "901811", "description": "心电图仪", "section": "光学及医疗仪器"},
+    {"code": "901839", "description": "其他医用导管", "section": "光学及医疗仪器"},
+    {"code": "901890", "description": "其他医疗仪器及器械", "section": "光学及医疗仪器"},
+    {"code": "901910", "description": "按摩器具", "section": "光学及医疗仪器"},
+    {"code": "902110", "description": "矫形器具", "section": "光学及医疗仪器"},
+    {"code": "902519", "description": "温度计（非液体式）", "section": "光学及医疗仪器"},
+    {"code": "902610", "description": "液体流量计", "section": "光学及医疗仪器"},
+    {"code": "902750", "description": "分光光度计", "section": "光学及医疗仪器"},
+    {"code": "902830", "description": "电度表", "section": "光学及医疗仪器"},
+    {"code": "903031", "description": "万用表", "section": "光学及医疗仪器"},
+    {"code": "903180", "description": "其他测量仪器", "section": "光学及医疗仪器"},
+    {"code": "903289", "description": "自动调节仪表", "section": "光学及医疗仪器"},
+    {"code": "910111", "description": "机械表（贵金属表壳）", "section": "钟表及其零件"},
+    {"code": "910211", "description": "电子手表", "section": "钟表及其零件"},
+    {"code": "920210", "description": "弦乐器", "section": "乐器"},
+    {"code": "920590", "description": "其他管乐器", "section": "乐器"},
+
+    # ── 第十九类 武器、弹药 (93) ──
+    {"code": "930200", "description": "手枪", "section": "武器及弹药"},
+    {"code": "930310", "description": "滑膛枪", "section": "武器及弹药"},
+    {"code": "930400", "description": "弹簧刀及剑", "section": "武器及弹药"},
+
+    # ── 第二十类 杂项制品 (94-96) ──
+    {"code": "940120", "description": "办公室用金属家具", "section": "家具及灯具"},
+    {"code": "940130", "description": "转椅", "section": "家具及灯具"},
+    {"code": "940161", "description": "木制沙发", "section": "家具及灯具"},
+    {"code": "940310", "description": "金属办公家具", "section": "家具及灯具"},
+    {"code": "940330", "description": "木制办公家具", "section": "家具及灯具"},
+    {"code": "940350", "description": "木制卧室家具", "section": "家具及灯具"},
+    {"code": "940360", "description": "木制其他家具", "section": "家具及灯具"},
+    {"code": "940421", "description": "乳胶床垫", "section": "家具及灯具"},
+    {"code": "940429", "description": "其他床垫", "section": "家具及灯具"},
+    {"code": "940540", "description": "其他电灯及灯具", "section": "家具及灯具"},
+    {"code": "940550", "description": "非电灯具", "section": "家具及灯具"},
+    {"code": "950300", "description": "玩具（玩偶、模型等）", "section": "玩具及运动用品"},
+    {"code": "950420", "description": "台球用品", "section": "玩具及运动用品"},
+    {"code": "950510", "description": "圣诞节用品", "section": "玩具及运动用品"},
+    {"code": "950631", "description": "高尔夫球杆", "section": "玩具及运动用品"},
+    {"code": "950639", "description": "其他高尔夫用品", "section": "玩具及运动用品"},
+    {"code": "950640", "description": "乒乓球用品", "section": "玩具及运动用品"},
+    {"code": "950662", "description": "充气球", "section": "玩具及运动用品"},
+    {"code": "950691", "description": "健身器材", "section": "玩具及运动用品"},
+    {"code": "960190", "description": "加工象牙及骨制品", "section": "杂项制品"},
+    {"code": "960200", "description": "植物或矿物质雕刻材料", "section": "杂项制品"},
+    {"code": "960321", "description": "牙刷", "section": "杂项制品"},
+    {"code": "960330", "description": "毛笔", "section": "杂项制品"},
+    {"code": "960340", "description": "油漆刷", "section": "杂项制品"},
+    {"code": "960622", "description": "金属钮扣", "section": "杂项制品"},
+    {"code": "960711", "description": "拉链", "section": "杂项制品"},
+    {"code": "960899", "description": "圆珠笔及笔芯", "section": "杂项制品"},
+    {"code": "961210", "description": "打字机色带", "section": "杂项制品"},
+    {"code": "961511", "description": "塑料梳子", "section": "杂项制品"},
+    {"code": "961590", "description": "发夹", "section": "杂项制品"},
+    {"code": "961700", "description": "保温瓶", "section": "杂项制品"},
+
+    # ── 第二十一类 艺术品、收藏品 (97) ──
+    {"code": "970110", "description": "油画", "section": "艺术品及收藏品"},
+    {"code": "970200", "description": "雕版画", "section": "艺术品及收藏品"},
+    {"code": "970300", "description": "雕塑原件", "section": "艺术品及收藏品"},
+    {"code": "970500", "description": "收藏品", "section": "艺术品及收藏品"},
+    {"code": "970600", "description": "超过100年的古董", "section": "艺术品及收藏品"},
+]
+
+
+def try_download(url: str) -> list[dict] | None:
+    """
+    尝试从 URL 下载 HS 编码 CSV，返回列表或 None。
+    """
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        print(f"  尝试下载: {url}")
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            content = resp.read().decode("utf-8")
+        print(f"  下载成功，正在解析 CSV...")
+
+        reader = csv.DictReader(io.StringIO(content))
+        records = []
+        for row in reader:
+            code = (row.get("Code") or "").strip().replace("-", "").replace(" ", "")
+            desc = (row.get("Description") or "").strip()
+            if code and desc:
+                # 取前6位编码
+                code_6 = code[:6] if len(code) >= 6 else code.zfill(6)
+                records.append({
+                    "code": code_6,
+                    "description": desc,
+                    "section": "",
+                })
+        if len(records) >= 50:
+            print(f"  成功解析 {len(records)} 条 HS 编码记录")
+            return records
+        else:
+            print(f"  解析记录不足 ({len(records)})，使用内置列表")
+            return None
+    except Exception as e:
+        print(f"  下载失败: {e}")
+        return None
+
+
+def main():
+    print("=" * 50)
+    print("  HS 编码获取脚本")
+    print("=" * 50)
+
+    # 尝试从远程下载
+    records = try_download(URL)
+
+    # 回退到内置列表
+    if records is None:
+        print("\n[备用] 使用内置 HS 编码列表 (200+ 条，覆盖 01-97 章)")
+        records = BUILTIN_HS_CODES
+
+    print(f"\n总共 {len(records)} 条 HS 编码")
+
+    # 导出 JSON
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
+
+    print(f"已导出到: {OUTPUT_PATH}")
+
+    # 打印前 5 条示例
+    print("\n📌 前 5 条示例：")
+    for r in records[:5]:
+        print(f"   {r}")
+
+    # 按章节统计
+    from collections import Counter
+    sections = Counter(r["section"] for r in records)
+    print(f"\n📊 章节分布（前10）：")
+    for sec, cnt in sections.most_common(10):
+        print(f"   {sec}: {cnt} 条")
+
+
+if __name__ == "__main__":
+    main()
