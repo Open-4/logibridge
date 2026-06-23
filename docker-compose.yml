@@ -8,7 +8,8 @@ services:
     volumes:
       - ./data-pipeline/output:/app/output
     environment:
-      - SECRET_KEY=your_jwt_secret_change_me
+      - LOGIBRIDGE_JWT_SECRET=${JWT_SECRET:-change_this_in_production}
+    restart: unless-stopped
 
   web:
     build:
@@ -16,5 +17,15 @@ services:
       dockerfile: nginx/Dockerfile
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      # certbot 证书持久化
+      - certbot-www:/var/www/certbot
+      - certbot-etc:/etc/letsencrypt
     depends_on:
       - server
+    restart: unless-stopped
+
+volumes:
+  certbot-www:
+  certbot-etc:
