@@ -358,7 +358,7 @@ const CompliancePage: React.FC = () => {
   const riskRegulationSummary: Record<string, string> = {
     anti_dumping: "根据 WTO《反倾销协定》及目的国国内贸易救济法规，被裁定反倾销的产品在进口时需按终裁税率缴纳额外关税保证金。税率取决于产品倾销幅度，通常每 12-18 个月进行一次行政复审。",
     additional_tariff: "该额外关税依据目的国贸易法条款（如美国《1974 年贸易法》第 301 节）征收。除非被撤销或到期，该关税在适用期间对进口商品持续有效。部分商品可能享有排除豁免，需单独申请。",
-  };────────
+  };
 
   const isHighRisk =
     scanResult?.risks.some((r) => r.level === "high") ?? false;
