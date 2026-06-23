@@ -6,6 +6,7 @@ import CompliancePage from "./pages/CompliancePage";
 import ControlTowerPage from "./pages/ControlTowerPage";
 import ShipmentsPage from "./pages/ShipmentsPage";
 import ConsultationPage from "./pages/ConsultationPage";
+import AdminConsultationsPage from "./pages/AdminConsultationsPage";
 import "./styles/global.css";
 
 const { darkAlgorithm } = theme;
@@ -29,6 +30,7 @@ function App() {
             <Route path="/control-tower" element={<ControlTowerPage />} />
             <Route path="/shipments" element={<ShipmentsPage />} />
             <Route path="/consultation" element={<ConsultationPage />} />
+            <Route path="/admin/consultations" element={<AdminConsultationsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
