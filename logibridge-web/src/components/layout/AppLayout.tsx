@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Menu, Badge, Avatar, Popover, List, Tag, Typography, Button, Empty, Space } from "antd";
+import { Menu, Badge, Avatar, Popover, List, Tag, Typography, Button, Empty, Space, Dropdown } from "antd";
 import {
   BellOutlined,
   UserOutlined,
@@ -12,6 +12,8 @@ import {
   RobotOutlined,
   CustomerServiceOutlined,
   CheckOutlined,
+  LogoutOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import dayjs from "dayjs";
@@ -20,6 +22,7 @@ import "dayjs/locale/zh-cn";
 import logoImg from "../../assets/images/logo.png";
 import { useConsultationNotifications } from "../../store/useConsultationNotifications";
 import { useRole } from "../../store/useRoleStore";
+import { useAuthStore } from "../../store/useAuthStore";
 
 dayjs.extend(relativeTime);
 dayjs.locale("zh-cn");
@@ -51,6 +54,42 @@ const AppLayout: React.FC = () => {
   const { isConsultant, toggleRole } = useRole();
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef<HTMLSpanElement>(null);
+  const { user, logout } = useAuthStore();
+
+  // ── 用户首字母头像 ──────────────────────────────────────────────
+  const userInitial = user?.name?.charAt(0)?.toUpperCase() || "U";
+  const avatarColors = ["#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#06B6D4"];
+  const avatarColor =
+    avatarColors[
+      (user?.name?.length ?? 0) % avatarColors.length
+    ];
+
+  // ── 用户下拉菜单 ────────────────────────────────────────────────
+  const userMenuItems: MenuProps["items"] = [
+    {
+      key: "profile",
+      icon: <UserOutlined />,
+      label: "个人中心",
+      onClick: () => navigate("/profile"),
+    },
+    {
+      key: "plans",
+      icon: <FileTextOutlined />,
+      label: "我的方案",
+      onClick: () => navigate("/my-plans"),
+    },
+    { type: "divider" },
+    {
+      key: "logout",
+      icon: <LogoutOutlined />,
+      label: "退出登录",
+      danger: true,
+      onClick: () => {
+        logout();
+        navigate("/login", { replace: true });
+      },
+    },
+  ];
 
   const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
     navigate(key);
@@ -289,12 +328,33 @@ const AppLayout: React.FC = () => {
             </span>
           </Popover>
 
-          {/* 用户头像 */}
-          <Avatar
-            size={32}
-            icon={<UserOutlined />}
-            style={{ backgroundColor: "#334155", cursor: "pointer" }}
-          />
+          {/* 用户下拉菜单 */}
+          <Dropdown
+            menu={{ items: userMenuItems }}
+            trigger={["click"]}
+            placement="bottomRight"
+            styles={{
+              dropdown: {
+                background: "#0F172A",
+                border: "1px solid #1E293B",
+                borderRadius: 10,
+                padding: 4,
+              },
+            }}
+          >
+            <Avatar
+              size={32}
+              style={{
+                backgroundColor: avatarColor,
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 14,
+                userSelect: "none",
+              }}
+            >
+              {userInitial}
+            </Avatar>
+          </Dropdown>
         </div>
       </header>
 

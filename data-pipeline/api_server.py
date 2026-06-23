@@ -14,10 +14,32 @@ import uuid
 from typing import Optional
 from datetime import date, datetime, timezone
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+
+from auth import (
+    UserCreate,
+    UserLogin,
+    TokenResponse,
+    create_user,
+    authenticate_user,
+    user_to_public,
+    get_current_user,
+    get_current_user_required,
+    create_access_token,   # 用于直接在路由中签发 token
+    USERS_BY_EMAIL,      # 用于检查邮箱唯一性
+    # 用户设置
+    UserSettingsPublic,
+    UserSettingsUpdate,
+    get_user_settings,
+    update_user_settings,
+    # API Key
+    create_api_key_for_user,
+    list_api_keys_for_user,
+    delete_api_key_for_user,
+)
 
 # ── 确保能导入同级模块 ──────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -1302,6 +1324,117 @@ def close_consultation(consultation_id: str):
     MESSAGES[consultation_id].append(sys_msg)
 
     return _build_consultation_dict(consultation_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  认证 API
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/auth/register", status_code=201)
+def register(req: UserCreate):
+    """注册新用户：验证邮箱唯一，创建用户，返回 token"""
+    # 检查邮箱是否已被注册
+    if req.email.lower().strip() in USERS_BY_EMAIL:
+        raise HTTPException(status_code=409, detail="该邮箱已被注册")
+
+    # 密码长度校验
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="密码长度不能少于 6 位")
+
+    # 创建用户
+    user = create_user(email=req.email, password=req.password, name=req.name)
+    token = create_access_token(data={"sub": user["id"]})
+
+    return TokenResponse(
+        access_token=token,
+        user=user_to_public(user),
+    )
+
+
+@app.post("/api/auth/login")
+def login(req: UserLogin):
+    """登录：验证邮箱密码，返回 token"""
+    user = authenticate_user(email=req.email, password=req.password)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="邮箱或密码错误",
+        )
+
+    token = create_access_token(data={"sub": user["id"]})
+    return TokenResponse(
+        access_token=token,
+        user=user_to_public(user),
+    )
+
+
+@app.get("/api/auth/me")
+def get_me(current_user: dict = Depends(get_current_user)):
+    """返回当前用户信息（需登录）"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="需要登录")
+    return user_to_public(current_user)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  用户设置 API
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/user/settings")
+def get_user_settings_route(
+    current_user: dict = Depends(get_current_user_required),
+):
+    """返回当前用户的设置"""
+    return get_user_settings(current_user["id"])
+
+
+@app.put("/api/user/settings")
+def update_user_settings_route(
+    req: UserSettingsUpdate,
+    current_user: dict = Depends(get_current_user_required),
+):
+    """更新用户设置（语言、货币、默认贸易术语、通知偏好）"""
+    updated = update_user_settings(
+        current_user["id"],
+        req.model_dump(exclude_none=True),
+    )
+    return updated
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  API Key 管理
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@app.post("/api/user/api-keys", status_code=201)
+def create_api_key(
+    name: str = Query("", description="API Key 名称"),
+    current_user: dict = Depends(get_current_user_required),
+):
+    """生成新 API key"""
+    return create_api_key_for_user(current_user["id"], name=name)
+
+
+@app.get("/api/user/api-keys")
+def list_api_keys(
+    current_user: dict = Depends(get_current_user_required),
+):
+    """列出所有 API keys"""
+    return list_api_keys_for_user(current_user["id"])
+
+
+@app.delete("/api/user/api-keys/{key_id}")
+def delete_api_key(
+    key_id: str,
+    current_user: dict = Depends(get_current_user_required),
+):
+    """删除指定 API key"""
+    deleted = delete_api_key_for_user(current_user["id"], key_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="API Key 未找到")
+    return {"detail": "已删除"}
 
 
 # ── 根路由 ─────────────────────────────────────────────────────────

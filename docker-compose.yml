@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  server:
+    build: ./data-pipeline
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data-pipeline/output:/app/output
+    environment:
+      - SECRET_KEY=your_jwt_secret_change_me
+
+  web:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - server
