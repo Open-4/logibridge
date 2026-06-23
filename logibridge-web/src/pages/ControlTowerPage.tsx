@@ -5,7 +5,7 @@
  * 地图层：GeoJsonLayer（风险事件）+ ScatterplotLayer（在途货物 / 高亮受影响的货物）
  */
 
-import { useEffect, useMemo, useRef, useState, useCallback, Fragment } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
@@ -36,6 +36,7 @@ import {
   SwapOutlined,
   ExpandOutlined,
   CompressOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import { Map as MapLibreMap, Popup, type MapRef } from "react-map-gl/maplibre";
 import DeckGL from "@deck.gl/react";
@@ -159,12 +160,63 @@ const ControlTowerPage: React.FC = () => {
     content: React.ReactNode;
   } | null>(null);
 
-  // 加载数据
-  useEffect(() => {
-    storeFetchShipments();
-    storeFetchRiskEvents();
-    loadRiskEvents();
+  // ── 轮询 & 最后更新时间 ──────────────────────────────────────
+  const [lastLoaded, setLastLoaded] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // 加载风险事件
+  const loadRiskEvents = useCallback(async () => {
+    try {
+      const geo = await fetchRiskEvents();
+      setRiskFeatures(geo.features ?? []);
+    } catch {
+      console.warn("加载风险事件地图数据失败");
+    }
   }, []);
+
+  // 统一刷新全部数据
+  const refreshAll = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([storeFetchShipments(), storeFetchRiskEvents(), loadRiskEvents()]);
+      setLastLoaded(new Date());
+    } catch {
+      console.warn("刷新失败");
+    }
+    setIsRefreshing(false);
+  }, [storeFetchShipments, storeFetchRiskEvents, loadRiskEvents]);
+
+  // 初始加载
+  useEffect(() => {
+    refreshAll();
+  }, []);
+
+  // 风险事件每 5 分钟轮询
+  useEffect(() => {
+    const id = setInterval(() => {
+      storeFetchRiskEvents();
+      loadRiskEvents();
+    }, 5 * 60_000);
+    return () => clearInterval(id);
+  }, [storeFetchRiskEvents, loadRiskEvents]);
+
+  // 在途货物每 10 分钟轮询
+  useEffect(() => {
+    const id = setInterval(() => {
+      storeFetchShipments();
+    }, 10 * 60_000);
+    return () => clearInterval(id);
+  }, [storeFetchShipments]);
+
+  // 台风事件每 30 分钟刷新（通过 riskEvents 接口）
+  useEffect(() => {
+    const hasTyphoon = riskEvents.some((e) => e.type === "typhoon");
+    if (!hasTyphoon) return;
+    const id = setInterval(() => {
+      loadRiskEvents();
+    }, 30 * 60_000);
+    return () => clearInterval(id);
+  }, [riskEvents, loadRiskEvents]);
 
   // 联动 4: 当 affectedShipments 变化时切换到 Tab2
   useEffect(() => {
@@ -172,7 +224,7 @@ const ControlTowerPage: React.FC = () => {
       setActiveTab("shipments");
       setPanelHeight(Math.max(panelHeight, 300));
     }
-  }, [affectedShipments, filterInTab2]);
+  }, [filterInTab2, affectedShipments, panelHeight]);
 
   const loadRiskEvents = async () => {
     try {
@@ -675,6 +727,38 @@ const ControlTowerPage: React.FC = () => {
             <Text style={{ color: "#CBD5E1", fontSize: 12 }}>台风/天气</Text>
           </div>
         </Space>
+
+        {/* ── 最后更新时间 + 手动刷新 ── */}
+        <div
+          style={{
+            borderTop: "1px solid #334155",
+            marginTop: 8,
+            paddingTop: 6,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+          }}
+        >
+          <Text style={{ color: "#64748B", fontSize: 10 }}>
+            {lastLoaded
+              ? `更新: ${lastLoaded.toLocaleTimeString("zh-CN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                })}`
+              : "加载中..."}
+          </Text>
+          <Button
+            size="small"
+            type="text"
+            icon={<ReloadOutlined spin={isRefreshing} />}
+            loading={isRefreshing}
+            onClick={refreshAll}
+            style={{ color: "#94A3B8", fontSize: 11, padding: 0, height: "auto" }}
+          >
+            刷新
+          </Button>
+        </div>
       </Card>
 
       {/* ══ Popup ══ */}
