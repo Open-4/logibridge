@@ -2,9 +2,10 @@
  * ControlTowerPage.tsx — 控制塔全屏监控页面
  *
  * 布局：全屏地图 + 底部可拖拽面板
+ * 地图层：GeoJsonLayer（风险事件）+ ScatterplotLayer（在途货物 / 高亮受影响的货物）
  */
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
@@ -41,6 +42,7 @@ import DeckGL from "@deck.gl/react";
 import {
   ArcLayer,
   ScatterplotLayer,
+  GeoJsonLayer,
   HeatmapLayer,
   IconLayer,
 } from "@deck.gl/layers";
@@ -52,11 +54,11 @@ import type {
   TrackingEventItem,
 } from "../api/controlTowerApi";
 import {
-  fetchShipments,
   fetchShipmentEvents,
-  fetchRiskEventsGeoJson,
+  fetchRiskEvents,
   fetchShipmentRisk,
 } from "../api/controlTowerApi";
+import { useControlTowerStore, getPortCoords } from "../store/useControlTowerStore";
 
 const { Text, Title } = Typography;
 
@@ -72,6 +74,18 @@ const SEVERITY_COLOR: Record<string, string> = {
   high: "#F97316",
   medium: "#EAB308",
   low: "#3B82F6",
+};
+const SEVERITY_FILL: Record<string, [number, number, number, number]> = {
+  critical: [239, 68, 68, 200],
+  high: [239, 68, 68, 180],
+  medium: [234, 179, 8, 160],
+  low: [59, 130, 246, 140],
+};
+const SEVERITY_LINE: Record<string, [number, number, number, number]> = {
+  critical: [239, 68, 68, 240],
+  high: [239, 68, 68, 220],
+  medium: [234, 179, 8, 200],
+  low: [59, 130, 246, 180],
 };
 
 const SEVERITY_LABEL: Record<string, string> = {
@@ -107,19 +121,32 @@ const STATUS_LABEL: Record<string, string> = {
 const ControlTowerPage: React.FC = () => {
   const navigate = useNavigate();
   const mapRef = useRef<MapRef>(null);
+  // ── Store ──────────────────────────────────────────────
+  const {
+    riskEvents,
+    shipments,
+    selectedEvent,
+    selectedShipment,
+    affectedShipments,
+    loading,
+    fetchRiskEvents: storeFetchRiskEvents,
+    fetchShipments: storeFetchShipments,
+    selectEvent,
+    selectShipment,
+  } = useControlTowerStore();
 
-  // 面板高度
+  // 面板
   const [panelHeight, setPanelHeight] = useState(200);
   const [panelExpanded, setPanelExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState("alerts");
+  const [highlightedRiskId, setHighlightedRiskId] = useState<string | null>(null);
+  const [filterInTab2, setFilterInTab2] = useState(false);
   const dragRef = useRef(false);
   const dragStartY = useRef(0);
   const dragStartH = useRef(0);
 
   // 数据
-  const [shipments, setShipments] = useState<ShipmentItem[]>([]);
   const [riskFeatures, setRiskFeatures] = useState<any[]>([]);
-  const [shipmentsLoading, setShipmentsLoading] = useState(false);
-  const [selectedBl, setSelectedBl] = useState<string | null>(null);
   const [selectedShipmentEvents, setSelectedShipmentEvents] = useState<
     TrackingEventItem[]
   >([]);
@@ -134,27 +161,125 @@ const ControlTowerPage: React.FC = () => {
 
   // 加载数据
   useEffect(() => {
-    loadShipments();
+    storeFetchShipments();
+    storeFetchRiskEvents();
     loadRiskEvents();
   }, []);
 
-  const loadShipments = async () => {
-    setShipmentsLoading(true);
-    try {
-      const data = await fetchShipments();
-      setShipments(data);
-    } catch {
-      message.error("加载货物列表失败");
+  // 联动 4: 当 affectedShipments 变化时切换到 Tab2
+  useEffect(() => {
+    if (filterInTab2 && affectedShipments.length > 0) {
+      setActiveTab("shipments");
+      setPanelHeight(Math.max(panelHeight, 300));
     }
-    setShipmentsLoading(false);
-  };
+  }, [affectedShipments, filterInTab2]);
 
   const loadRiskEvents = async () => {
     try {
-      const geo = await fetchRiskEventsGeoJson();
+      const geo = await fetchRiskEvents();
       setRiskFeatures(geo.features ?? []);
     } catch {
       console.warn("加载风险事件地图数据失败");
+    }
+  };
+
+  // ── 联动 1: 点击风险 → Tab1 高亮 ──────────────────────────
+
+  const handleRiskClick = (feature: any, x: number, y: number) => {
+    // 选中 Store
+    selectEvent({
+      id: feature.properties.id,
+      type: feature.properties.type,
+      severity: feature.properties.severity,
+      title: feature.properties.title,
+      description: feature.properties.description,
+      radius_km: feature.properties.radius_km,
+      start_date: feature.properties.start_date,
+      end_date: feature.properties.end_date,
+      source: feature.properties.source,
+      coordinates: feature.geometry.coordinates,
+      affected_ports: feature.properties.affected_ports,
+      affected_routes: feature.properties.affected_routes,
+    });
+
+    // 切换到 Tab1 并高亮
+    setActiveTab("alerts");
+    setHighlightedRiskId(feature.properties.id);
+    setPanelHeight(Math.max(panelHeight, 280));
+
+    setPopupInfo({
+      x,
+      y,
+      content: (
+        <div style={{ minWidth: 220 }}>
+          <Space>
+            <span>{TYPE_ICON[feature.properties.type] || "🔔"}</span>
+            <span style={{ fontWeight: 600 }}>
+              {feature.properties.title}
+            </span>
+            <Tag color={SEVERITY_COLOR[feature.properties.severity]}>
+              {SEVERITY_LABEL[feature.properties.severity]}
+            </Tag>
+          </Space>
+          <div style={{ fontSize: 12, color: "#666", margin: "6px 0" }}>
+            {feature.properties.description?.slice(0, 120)}...
+          </div>
+          <Space>
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => {
+                flyTo(feature.geometry.coordinates[0], feature.geometry.coordinates[1]);
+                setPopupInfo(null);
+              }}
+            >
+              查看影响
+            </Button>
+            <Button size="small" onClick={() => setPopupInfo(null)}>
+              关闭
+            </Button>
+          </Space>
+        </div>
+      ),
+    });
+  };
+
+  // ── 联动 2: 查看影响 ─────────────────────────────────────
+
+  const handleViewImpact = () => {
+    setFilterInTab2(true);
+    setActiveTab("shipments");
+    setPanelHeight(Math.max(panelHeight, 300));
+  };
+
+  // ── 联动 3: 点击货物行 → 飞往 → 弧线 ─────────────────────
+
+  const handleShipmentRowClick = (bl: string) => {
+    const s = shipments.find((s) => s.bl_number === bl);
+    if (!s) return;
+    selectShipment(s as any);
+    const coords = getPortCoords(s.origin);
+    if (coords[0] !== 0 || coords[1] !== 0) {
+      flyTo(coords[0], coords[1]);
+    }
+  };
+
+  // ── 联动 4: 生成备选方案 → 跳转 SmartPlan ────────────────
+
+  const handleGenerateAlternative = () => {
+    if (!selectedEvent) return;
+    // 从受影响货物推断起运港和目的港
+    const firstAffected = affectedShipments[0];
+    if (firstAffected) {
+      const params = new URLSearchParams({
+        origin: firstAffected.origin,
+        destination: firstAffected.destination,
+        avoid: selectedEvent.coordinates.join(","),
+        riskType: selectedEvent.type,
+      });
+      navigate(`/?${params.toString()}`);
+    } else {
+      navigate("/");
     }
   };
 
@@ -187,7 +312,8 @@ const ControlTowerPage: React.FC = () => {
   // ── 点击货物 ─────────────────────────────────────────────────
 
   const handleShipmentClick = async (bl: string, x: number, y: number) => {
-    setSelectedBl(bl);
+    const s = shipments.find((s) => s.bl_number === bl);
+    if (s) selectShipment(s);
     try {
       const evResp = await fetchShipmentEvents(bl);
       setSelectedShipmentEvents(evResp.events);
@@ -225,56 +351,66 @@ const ControlTowerPage: React.FC = () => {
 
   // 风险事件 Scatterplot
   const riskLayer = useMemo(() => {
-    if (!riskFeatures.length) return null;
-    const data = riskFeatures.map((f) => ({
-      coordinates: f.geometry.coordinates,
-      severity: f.properties.severity,
-      type: f.properties.type,
-      title: f.properties.title,
-      radius: f.properties.radius_km * 1000,
-      ...f.properties,
-    }));
-
-    return new ScatterplotLayer<any>({
-      id: "risks",
+    if (!riskEvents.length && !riskFeatures.length) return null;
+    const data = riskEvents.length > 0
+      ? {
+          type: "FeatureCollection" as const,
+          features: riskEvents.map((e) => ({
+            type: "Feature" as const,
+            properties: e,
+            geometry: {
+              type: "Point" as const,
+              coordinates: e.coordinates,
+            },
+          })),
+        }
+      : { type: "FeatureCollection" as const, features: riskFeatures };
+    return new GeoJsonLayer<any>({
+      id: "risk-events",
       data,
-      getPosition: (d) => d.coordinates,
+      pointRadiusMinPixels: 6,
+      pointRadiusMaxPixels: 80,
+      getPointRadius: (f) => (f.properties.radius_km || 200) * 1000,
       getFillColor: (d) => {
-        const c = SEVERITY_COLOR[d.severity] || "#3B82F6";
-        return [...hexToRgb(c), d.severity === "critical" ? 180 : 120];
+        const severity = d.properties.severity;
+        return SEVERITY_FILL[severity] || [59, 130, 246, 120];
       },
-      getRadius: (d) => d.radius || 200000,
-      radiusMinPixels: 20,
-      radiusMaxPixels: 200,
-      pickable: true,
+      getLineColor: (d) => {
+        const severity = d.properties.severity;
+        return SEVERITY_LINE[severity] || [59, 130, 246, 160];
+      },
+      lineWidthMinPixels: 1.5,
       stroked: true,
-      getLineColor: (d) => [...hexToRgb(SEVERITY_COLOR[d.severity] || "#3B82F6"), 220],
-      lineWidthMinPixels: 2,
+      pickable: true,
       onClick: (info) => {
         if (!info.object) return;
+        const props = info.object.properties;
+        const matched = riskEvents.find((e) => e.id === props.id);
+        if (matched) selectEvent(matched);
         setPopupInfo({
           x: info.x,
           y: info.y,
           content: (
             <div style={{ minWidth: 220 }}>
               <Space>
-                <span>{TYPE_ICON[info.object.type] || "🔔"}</span>
+                <span>{TYPE_ICON[props.type] || "🔔"}</span>
                 <span style={{ fontWeight: 600 }}>
-                  {info.object.title}
+                  {props.title}
                 </span>
-                <Tag color={SEVERITY_COLOR[info.object.severity]}>
-                  {SEVERITY_LABEL[info.object.severity]}
+                <Tag color={SEVERITY_COLOR[props.severity]}>
+                  {SEVERITY_LABEL[props.severity]}
                 </Tag>
               </Space>
               <div style={{ fontSize: 12, color: "#666", margin: "6px 0" }}>
-                {info.object.description?.slice(0, 120)}...
+                {props.description?.slice(0, 120)}...
               </div>
               <Space>
                 <Button
                   size="small"
                   type="primary"
                   onClick={() => {
-                    flyTo(info.object.coordinates[0], info.object.coordinates[1]);
+                    const coords = info.object.geometry.coordinates;
+                    flyTo(coords[0], coords[1]);
                     setPopupInfo(null);
                   }}
                 >
@@ -289,12 +425,16 @@ const ControlTowerPage: React.FC = () => {
         });
       },
     });
-  }, [riskFeatures]);
+  }, [riskEvents, riskFeatures]);
 
-  // 在途货物 Scatterplot
+  // 在途货物 Scatterplot（联动2: 受影响高亮）
+  const affectedBls = useMemo(
+    () => new Set(affectedShipments.map((a) => a.bl_number)),
+    [affectedShipments],
+  );
+
   const shipmentLayer = useMemo(() => {
     if (!shipments.length) return null;
-    // 从 ports.json 获取坐标
     const data = shipments.map((s) => ({
       bl: s.bl_number,
       status: s.status,
@@ -302,40 +442,43 @@ const ControlTowerPage: React.FC = () => {
       destination: s.destination,
       eta: s.eta,
       cargo: s.cargo_desc,
-      // 使用港口代码占位坐标 (实际应从 ports.json 加载)
       coordinates: getPortCoords(s.origin),
+      affected: affectedBls.has(s.bl_number),
     }));
 
     return new ScatterplotLayer<any>({
       id: "shipments",
       data,
       getPosition: (d) => d.coordinates,
-      getFillColor: (d) =>
-        d.status === "delayed"
-          ? [239, 68, 68, 200]
-          : d.status === "customs_clearance"
-            ? [251, 191, 36, 200]
-            : d.status === "delivered"
-              ? [16, 185, 129, 200]
-              : [59, 130, 246, 200],
-      getRadius: 40000,
-      radiusMinPixels: 6,
-      radiusMaxPixels: 14,
+      getFillColor: (d) => {
+        if (d.affected) {
+          if (d.status === "delayed") return [255, 80, 80, 255];
+          if (d.status === "delivered") return [52, 211, 153, 255];
+          return [96, 165, 250, 255];
+        }
+        if (d.status === "delayed") return [239, 68, 68, 200];
+        if (d.status === "customs_clearance") return [251, 191, 36, 200];
+        if (d.status === "delivered") return [16, 185, 129, 200];
+        return [59, 130, 246, 200];
+      },
+      getRadius: (d) => (d.affected ? 65000 : 40000),
+      radiusMinPixels: (d) => (d.affected ? 10 : 4),
+      radiusMaxPixels: (d) => (d.affected ? 24 : 14),
       pickable: true,
       stroked: true,
-      getLineColor: [255, 255, 255, 150],
-      lineWidthMinPixels: 1,
+      getLineColor: (d) => d.affected ? [255, 255, 255, 220] : [255, 255, 255, 120],
+      lineWidthMinPixels: (d) => d.affected ? 2 : 1,
       onClick: (info) => {
         if (!info.object) return;
         handleShipmentClick(info.object.bl, info.x, info.y);
       },
     });
-  }, [shipments]);
+  }, [shipments, affectedShipments]);
 
   // 航线弧线（选中货物时高亮）
   const highlightArcLayer = useMemo(() => {
-    if (!selectedBl) return null;
-    const s = shipments.find((s) => s.bl_number === selectedBl);
+    if (!selectedShipment) return null;
+    const s = selectedShipment;
     if (!s) return null;
     return new ArcLayer({
       id: "highlight-route",
@@ -348,7 +491,7 @@ const ControlTowerPage: React.FC = () => {
       widthMinPixels: 2,
       widthMaxPixels: 6,
     });
-  }, [selectedBl, shipments]);
+  }, [selectedShipment, shipments]);
 
   const layers = useMemo(
     () => [riskLayer, shipmentLayer, highlightArcLayer].filter(Boolean),
@@ -407,7 +550,7 @@ const ControlTowerPage: React.FC = () => {
             <Button
               size="small"
               icon={<SwapOutlined />}
-              onClick={() => setSelectedBl(r.bl_number)}
+              onClick={() => selectShipment(r)}
             />
           </Tooltip>
           <Tooltip title="设置预警">
@@ -593,7 +736,8 @@ const ControlTowerPage: React.FC = () => {
         }}
       >
         <Tabs
-          defaultActiveKey="alerts"
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key)}
           tabBarStyle={{
             margin: "0 16px",
             paddingTop: 8,
@@ -661,23 +805,42 @@ const ControlTowerPage: React.FC = () => {
                                 size="small"
                                 type="primary"
                                 icon={<AimOutlined />}
-                                onClick={() =>
-                                  flyTo(
-                                    f.geometry.coordinates[0],
-                                    f.geometry.coordinates[1],
-                                  )
-                                }
+                                onClick={() => {
+                                  selectEvent({
+                                    id: f.properties.id,
+                                    type: f.properties.type,
+                                    severity: f.properties.severity,
+                                    title: f.properties.title,
+                                    description: f.properties.description,
+                                    radius_km: f.properties.radius_km,
+                                    start_date: f.properties.start_date,
+                                    end_date: f.properties.end_date,
+                                    source: f.properties.source,
+                                    coordinates: f.geometry.coordinates,
+                                  });
+                                  flyTo(f.geometry.coordinates[0], f.geometry.coordinates[1]);
+                                }}
                               >
                                 查看影响
                               </Button>
                               <Button
                                 size="small"
                                 icon={<SafetyOutlined />}
-                                onClick={() =>
-                                  message.info(
-                                    "货物筛选功能: 显示受此事件影响的在途货物",
-                                  )
-                                }
+                                onClick={() => {
+                                  selectEvent({
+                                    id: f.properties.id,
+                                    type: f.properties.type,
+                                    severity: f.properties.severity,
+                                    title: f.properties.title,
+                                    description: f.properties.description,
+                                    radius_km: f.properties.radius_km,
+                                    start_date: f.properties.start_date,
+                                    end_date: f.properties.end_date,
+                                    source: f.properties.source,
+                                    coordinates: f.geometry.coordinates,
+                                  });
+                                  handleViewImpact();
+                                }}
                               >
                                 影响货物
                               </Button>
@@ -685,8 +848,19 @@ const ControlTowerPage: React.FC = () => {
                                 size="small"
                                 icon={<SwapOutlined />}
                                 onClick={() => {
-                                  message.success("已预填绕过风险区域的参数，跳转至方案推演");
-                                  navigate("/");
+                                  selectEvent({
+                                    id: f.properties.id,
+                                    type: f.properties.type,
+                                    severity: f.properties.severity,
+                                    title: f.properties.title,
+                                    description: f.properties.description,
+                                    radius_km: f.properties.radius_km,
+                                    start_date: f.properties.start_date,
+                                    end_date: f.properties.end_date,
+                                    source: f.properties.source,
+                                    coordinates: f.geometry.coordinates,
+                                  });
+                                  handleGenerateAlternative();
                                 }}
                               >
                                 生成备选方案
@@ -718,18 +892,19 @@ const ControlTowerPage: React.FC = () => {
                     columns={columns}
                     rowKey="bl_number"
                     size="small"
-                    loading={shipmentsLoading}
+                    loading={loading}
                     expandable={{
                       expandedRowRender,
                       expandRowByClick: true,
                     }}
                     onRow={(record) => ({
-                      onClick: () => setSelectedBl(record.bl_number),
+                      onClick: () => handleShipmentRowClick(record.bl_number),
                       style: {
                         cursor: "pointer",
-                        background:
-                          selectedBl === record.bl_number
-                            ? "rgba(59, 130, 246, 0.1)"
+                        background: selectedShipment?.bl_number === record.bl_number
+                          ? "rgba(59, 130, 246, 0.1)"
+                          : affectedBls.has(record.bl_number)
+                            ? "rgba(239, 68, 68, 0.06)"
                             : undefined,
                       },
                     })}
@@ -846,50 +1021,4 @@ const ControlTowerPage: React.FC = () => {
     </div>
   );
 };
-
-// ── 工具函数 ──────────────────────────────────────────────────────
-
-function hexToRgb(hex: string): [number, number, number] {
-  const clean = hex.replace("#", "");
-  return [
-    parseInt(clean.substring(0, 2), 16),
-    parseInt(clean.substring(2, 4), 16),
-    parseInt(clean.substring(4, 6), 16),
-  ];
-}
-
-/** 港口代码 → 坐标的简易映射（实际应从 ports.json 加载） */
-function getPortCoords(code: string): [number, number] {
-  const MAP: Record<string, [number, number]> = {
-    CNSHA: [121.47, 31.23],
-    CNSGH: [121.48, 31.23],
-    CNNGB: [121.88, 29.88],
-    CNXMN: [118.07, 24.46],
-    CNYTN: [114.27, 22.58],
-    CNTAO: [120.3, 36.07],
-    CNTSN: [117.72, 38.98],
-    CNSHK: [113.92, 22.48],
-    USLAX: [-118.24, 33.74],
-    USLGB: [-118.19, 33.76],
-    USNYC: [-74.01, 40.71],
-    USSEA: [-122.33, 47.6],
-    NLRTM: [4.5, 51.9],
-    DEHAM: [9.99, 53.55],
-    SGSIN: [103.85, 1.28],
-    KRPUS: [129.05, 35.13],
-    AEFJR: [55.37, 25.12],
-    THLCH: [100.88, 13.07],
-    AUSYD: [151.2, -33.85],
-    CAVAN: [-123.12, 49.28],
-    JPYOK: [139.65, 35.45],
-    TWTXG: [120.28, 22.62],
-    VNHCM: [106.7, 10.77],
-    COBAL: [-79.56, 8.95],
-    ZACPT: [18.42, -33.9],
-    EGPSD: [32.35, 31.22],
-    HKHKG: [114.17, 22.32],
-  };
-  return MAP[code] || [0, 0];
-}
-
 export default ControlTowerPage;
