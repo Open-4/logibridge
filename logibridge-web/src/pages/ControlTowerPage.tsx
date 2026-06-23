@@ -38,7 +38,7 @@ import {
   CompressOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import { Map as MapLibreMap, Popup, type MapRef } from "react-map-gl/maplibre";
+import { Map as MapLibreMap, Popup, Marker, type MapRef } from "react-map-gl/maplibre";
 import DeckGL from "@deck.gl/react";
 import {
   ArcLayer,
@@ -122,6 +122,59 @@ const STATUS_LABEL: Record<string, string> = {
 const ControlTowerPage: React.FC = () => {
   const navigate = useNavigate();
   const mapRef = useRef<MapRef>(null);
+  // ── 全局 CSS 动画（仅注入一次） ──────────────────────────
+  useEffect(() => {
+    const id = "control-tower-anim";
+    if (document.getElementById(id)) return;
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+      @keyframes pulse-ring {
+        0%   { transform: scale(1); opacity: 0.7; }
+        50%  { transform: scale(2.5); opacity: 0.3; }
+        100% { transform: scale(4); opacity: 0; }
+      }
+      @keyframes pulse-ring-inner {
+        0%   { transform: scale(1); opacity: 0.5; }
+        50%  { transform: scale(1.5); opacity: 0.8; }
+        100% { transform: scale(1); opacity: 0.5; }
+      }
+      @keyframes blink-delayed {
+        0%, 100% { opacity: 1; }
+        50%      { opacity: 0.2; }
+      }
+      .risk-marker-pulse {
+        width: 12px; height: 12px;
+        border-radius: 50%;
+        position: relative;
+      }
+      .risk-marker-pulse::before {
+        content: '';
+        position: absolute;
+        inset: -8px;
+        border-radius: 50%;
+        border: 2px solid currentColor;
+        animation: pulse-ring 2s ease-out infinite;
+      }
+      .risk-marker-pulse::after {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 1px solid currentColor;
+        animation: pulse-ring-inner 2s ease-out infinite 0.5s;
+      }
+      .marker-delayed {
+        width: 14px; height: 14px;
+        border-radius: 50%;
+        background: #EF4444;
+        border: 2px solid #fff;
+        animation: blink-delayed 1.2s ease-in-out infinite;
+        box-shadow: 0 0 6px rgba(239,68,68,0.6);
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
   // ── Store ──────────────────────────────────────────────
   const {
     riskEvents,
@@ -665,6 +718,47 @@ const ControlTowerPage: React.FC = () => {
           style={{ width: "100%", height: "100%" }}
         />
       </DeckGL>
+
+      {/* ══ CSS 动画 Marker 层（高风险 / 延误货物） ══ */}
+      {riskEvents
+        .filter((e) => e.severity === "high" || e.severity === "critical")
+        .map((e) => (
+          <Marker
+            key={`risk-${e.id}`}
+            longitude={e.coordinates[0]}
+            latitude={e.coordinates[1]}
+            anchor="center"
+            onClick={() => {
+              // 触发 handleRiskClick 类似的逻辑
+              setActiveTab("alerts");
+              setHighlightedRiskId(e.id);
+              flyTo(e.coordinates[0], e.coordinates[1]);
+            }}
+          >
+            <div
+              className="risk-marker-pulse"
+              style={{
+                color: e.severity === "critical" ? "#EF4444" : "#F97316",
+                cursor: "pointer",
+              }}
+              title={e.title}
+            />
+          </Marker>
+        ))}
+
+      {/* 延误货物闪烁标记 */}
+      {shipments
+        .filter((s) => s.status === "delayed")
+        .map((s) => (
+          <Marker
+            key={`delay-${s.bl_number}`}
+            longitude={getPortCoords(s.origin)[0]}
+            latitude={getPortCoords(s.origin)[1]}
+            anchor="center"
+          >
+            <div className="marker-delayed" title={`${s.bl_number} (延误)`} />
+          </Marker>
+        ))}
 
       {/* ══ 左侧图例 ══ */}
       <Card
