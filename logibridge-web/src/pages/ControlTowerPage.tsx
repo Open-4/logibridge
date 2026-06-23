@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
 import {
   Tabs,
   Timeline,
@@ -388,15 +389,21 @@ const ControlTowerPage: React.FC = () => {
     }
   };
 
-  // ── 面板拖拽 ─────────────────────────────────────────────────
+  // ── 面板拖拽（react-draggable 风格的自定义实现） ──────────
+
+  const panelMinH = 150;
+  const panelMaxH = 500;
 
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent | React.TouchEvent) => {
       dragRef.current = true;
-      dragStartY.current = e.clientY;
+      const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+      dragStartY.current = clientY;
       dragStartH.current = panelHeight;
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("touchmove", handleTouchMove, { passive: false });
+      document.addEventListener("touchend", handleTouchEnd);
     },
     [panelHeight],
   );
@@ -404,15 +411,36 @@ const ControlTowerPage: React.FC = () => {
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!dragRef.current) return;
     const delta = dragStartY.current - e.clientY;
-    const newH = Math.min(500, Math.max(120, dragStartH.current + delta));
+    const newH = Math.min(panelMaxH, Math.max(panelMinH, dragStartH.current + delta));
     setPanelHeight(newH);
+    setPanelExpanded(newH > 300);
   }, []);
 
   const handleMouseUp = useCallback(() => {
     dragRef.current = false;
     document.removeEventListener("mousemove", handleMouseMove);
     document.removeEventListener("mouseup", handleMouseUp);
-  }, [handleMouseMove]);
+    // 将最终高度写入 store
+    const state = useControlTowerStore.getState();
+    if (state.setPanelHeight) state.setPanelHeight(panelHeight);
+  }, [handleMouseMove, panelHeight]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!dragRef.current) return;
+    e.preventDefault();
+    const delta = dragStartY.current - e.touches[0].clientY;
+    const newH = Math.min(panelMaxH, Math.max(panelMinH, dragStartH.current + delta));
+    setPanelHeight(newH);
+    setPanelExpanded(newH > 300);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    dragRef.current = false;
+    document.removeEventListener("touchmove", handleTouchMove);
+    document.removeEventListener("touchend", handleTouchEnd);
+    const state = useControlTowerStore.getState();
+    if (state.setPanelHeight) state.setPanelHeight(panelHeight);
+  }, [handleTouchMove, panelHeight]);
 
   // ── 点击货物 ─────────────────────────────────────────────────
 
@@ -878,9 +906,10 @@ const ControlTowerPage: React.FC = () => {
           document.body,
         )}
 
-      {/* ══ 底部面板拖拽把手 ══ */}
+      {/* ══ 底部面板拖拽把手（支持 mouse + touch） ══ */}
       <div
         onMouseDown={handleMouseDown}
+        onTouchStart={handleMouseDown}
         style={{
           position: "absolute",
           bottom: panelHeight - 8,
@@ -896,21 +925,26 @@ const ControlTowerPage: React.FC = () => {
         }}
       />
 
-      {/* ══ 底部面板 ══ */}
-      <div
+      {/* ══ 底部面板（framer-motion spring 动画） ══ */}
+      <motion.div
+        animate={{ height: panelHeight }}
+        transition={{
+          type: "spring",
+          stiffness: 260,
+          damping: 30,
+          mass: 1,
+        }}
         style={{
           position: "absolute",
           bottom: 0,
           left: 0,
           right: 0,
-          height: panelHeight,
           zIndex: 15,
           background: "rgba(15, 23, 42, 0.92)",
           borderTop: "1px solid #334155",
           backdropFilter: "blur(12px)",
           display: "flex",
           flexDirection: "column",
-          transition: panelExpanded ? "height 0.3s ease" : "none",
         }}
       >
         <Tabs
@@ -926,7 +960,7 @@ const ControlTowerPage: React.FC = () => {
               type="text"
               icon={panelHeight < 400 ? <ExpandOutlined /> : <CompressOutlined />}
               onClick={() => {
-                const next = panelHeight < 400 ? 460 : 200;
+                const next = panelHeight < 300 ? 460 : panelMinH;
                 setPanelHeight(next);
                 setPanelExpanded(next > 300);
               }}
