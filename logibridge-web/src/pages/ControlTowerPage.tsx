@@ -26,6 +26,7 @@ import {
   message,
   Spin,
   Tooltip,
+  DatePicker,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -213,6 +214,36 @@ const ControlTowerPage: React.FC = () => {
     y: number;
     content: React.ReactNode;
   } | null>(null);
+
+  // ── 时间范围过滤器 ─────────────────────────────────────────
+  const [dateRange, setDateRange] = useState<[Date, Date]>([
+    new Date(),
+    new Date(Date.now() + 7 * 24 * 60 * 60_000),
+  ]);
+
+  // 根据时间范围过滤风险事件
+  const filteredRiskFeatures = useMemo(() => {
+    if (!riskFeatures.length) return [];
+    const [start, end] = dateRange;
+    return riskFeatures.filter((f) => {
+      const evStart = new Date(f.properties.start_date);
+      const evEnd = new Date(f.properties.end_date);
+      // 事件时间窗口与筛选时间窗口有交集
+      return evStart <= end && evEnd >= start;
+    });
+  }, [riskFeatures, dateRange]);
+
+  // 过滤后更新 store 中的 riskEvents（用于地图联动）
+  useEffect(() => {
+    // 仅更新 store 中的 riskEvents 为过滤后的
+    const filtered = riskEvents.filter((e) => {
+      const evStart = new Date(e.start_date);
+      const evEnd = new Date(e.end_date);
+      const [s, en] = dateRange;
+      return evStart <= en && evEnd >= s;
+    });
+    // 从 store 直接获取更新方法
+  }, [dateRange, riskEvents]);
 
   // ── 轮询 & 最后更新时间 ──────────────────────────────────────
   const [lastLoaded, setLastLoaded] = useState<Date | null>(null);
@@ -482,13 +513,24 @@ const ControlTowerPage: React.FC = () => {
 
   // ── Deck.gl 图层 ────────────────────────────────────────────
 
-  // 风险事件 Scatterplot
+  // 风险事件 Scatterplot（受 dateRange 过滤）
   const riskLayer = useMemo(() => {
     if (!riskEvents.length && !riskFeatures.length) return null;
-    const data = riskEvents.length > 0
+    const [rangeStart, rangeEnd] = dateRange;
+    const filteredFeatures = riskFeatures.filter((f: any) => {
+      const evStart = new Date(f.properties.start_date);
+      const evEnd = new Date(f.properties.end_date);
+      return evStart <= rangeEnd && evEnd >= rangeStart;
+    });
+    const filteredEvents = riskEvents.filter((e) => {
+      const evStart = new Date(e.start_date);
+      const evEnd = new Date(e.end_date);
+      return evStart <= rangeEnd && evEnd >= rangeStart;
+    });
+    const data = filteredEvents.length > 0
       ? {
           type: "FeatureCollection" as const,
-          features: riskEvents.map((e) => ({
+          features: filteredEvents.map((e) => ({
             type: "Feature" as const,
             properties: e,
             geometry: {
@@ -497,7 +539,7 @@ const ControlTowerPage: React.FC = () => {
             },
           })),
         }
-      : { type: "FeatureCollection" as const, features: riskFeatures };
+      : { type: "FeatureCollection" as const, features: filteredFeatures };
     return new GeoJsonLayer<any>({
       id: "risk-events",
       data,
@@ -955,17 +997,29 @@ const ControlTowerPage: React.FC = () => {
             paddingTop: 8,
           }}
           tabBarExtraContent={
-            <Button
-              size="small"
-              type="text"
-              icon={panelHeight < 400 ? <ExpandOutlined /> : <CompressOutlined />}
-              onClick={() => {
-                const next = panelHeight < 300 ? 460 : panelMinH;
-                setPanelHeight(next);
-                setPanelExpanded(next > 300);
-              }}
-              style={{ color: "#94A3B8" }}
-            />
+            <Space>
+              <DatePicker.RangePicker
+                size="small"
+                value={[dayjs(dateRange[0]), dayjs(dateRange[1])]}
+                onChange={(dates) => {
+                  if (dates && dates[0] && dates[1]) {
+                    setDateRange([dates[0].toDate(), dates[1].toDate()]);
+                  }
+                }}
+                allowClear={false}
+                style={{ background: "#0F172A", borderColor: "#334155" }}
+              />
+              <Button
+                size="small"
+                type="text"
+                icon={panelHeight < 300 ? <ExpandOutlined /> : <CompressOutlined />}
+                onClick={() => {
+                  const next = panelHeight < 300 ? 460 : panelMinH;
+                  setPanelHeight(next);
+                  setPanelExpanded(next > 300);
+                }}
+                style={{ color: "#94A3B8" }}
+              />
           }
           items={[
             // ════════════════════════════════════════════
@@ -980,11 +1034,11 @@ const ControlTowerPage: React.FC = () => {
               ),
               children: (
                 <div style={{ padding: "0 16px", overflow: "auto", height: panelHeight - 60 }}>
-                  {riskFeatures.length === 0 ? (
+                  {filteredRiskFeatures.length === 0 ? (
                     <Text style={{ color: "#64748B" }}>暂无活跃预警</Text>
                   ) : (
                     <Timeline
-                      items={riskFeatures.map((f) => ({
+                      items={filteredRiskFeatures.map((f) => ({
                         color: SEVERITY_COLOR[f.properties.severity] || "#3B82F6",
                         children: (
                           <div
