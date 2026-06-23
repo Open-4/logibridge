@@ -1,5 +1,5 @@
 """
-api_server.py — FastAPI 应用：港口查询、HS 编码查询、运费估算、合规扫描、单证生成
+api_server.py — FastAPI 应用：港口查询、HS 编码查询、运费估算、合规扫描、单证生成、货物追踪
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import sys
 import io
 from pathlib import Path
 from typing import Optional
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +21,13 @@ from pydantic import BaseModel, Field
 # ── 确保能导入同级模块 ──────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from freight_estimator import estimate_freight
+from tracking_models import (
+    Shipment,
+    TrackingEvent,
+    ShipmentTrackingResponse,
+    get_mock_shipment,
+    get_mock_shipments_list,
+)
 
 # ── 数据目录 ────────────────────────────────────────────────────────
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
@@ -572,6 +579,146 @@ def generate_document(req: DocGenerateRequest):
         return Response(content=html, media_type="text/html")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  货物追踪 API
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@app.get("/api/shipments")
+def list_shipments(
+    status: str = Query("", description="按状态过滤"),
+    search: str = Query("", description="提单号搜索"),
+):
+    """返回货物列表，支持状态过滤和提单号搜索"""
+    shipments = get_mock_shipments_list()
+    result = []
+
+    for s in shipments:
+        if status and s["status"] != status:
+            continue
+        if search and search.lower() not in s["bl_number"].lower():
+            continue
+        result.append(s)
+
+    return result
+
+
+@app.get("/api/shipments/{bl_number}/events")
+def get_shipment_events(bl_number: str):
+    """返回货物的轨迹时间线"""
+    data = get_mock_shipment(bl_number)
+    if not data:
+        raise HTTPException(status_code=404, detail=f"提单号 {bl_number} 未找到")
+
+    events = []
+    for ev in data["events"]:
+        events.append({
+            "id": "",
+            "shipmentId": bl_number,
+            "eventType": ev["event_type"],
+            "location": ev["location"],
+            "timestamp": ev["timestamp"],
+            "description": ev["description"],
+        })
+
+    return {"blNumber": bl_number, "events": events}
+
+
+@app.get("/api/shipments/{bl_number}/risk")
+def get_shipment_risk(bl_number: str):
+    """检查货物是否受当前活跃风险事件影响"""
+    data = get_mock_shipment(bl_number)
+    if not data:
+        raise HTTPException(status_code=404, detail=f"提单号 {bl_number} 未找到")
+
+    # 加载风险事件进行匹配
+    risk_path = OUTPUT_DIR / "risk_events.json"
+    active_risks = []
+    if risk_path.exists():
+        with open(risk_path, "r", encoding="utf-8") as f:
+            events = json.load(f)
+
+        today = datetime.utcnow().isoformat()
+        for ev in events:
+            if ev["end_date"] < today[:10]:
+                continue
+            # 检查是否影响该货物的起运港或目的港
+            if data["origin"] in ev["affected_ports"] or data["destination"] in ev["affected_ports"]:
+                active_risks.append({
+                    "type": ev["type"],
+                    "severity": ev["severity"],
+                    "title": ev["title"],
+                    "description": ev["description"][:200],
+                    "radius_km": ev["radius_km"],
+                })
+
+    overall = "low"
+    for r in active_risks:
+        if r["severity"] == "critical":
+            overall = "critical"
+            break
+        if r["severity"] == "high" and overall != "critical":
+            overall = "high"
+        if r["severity"] == "medium" and overall not in ("critical", "high"):
+            overall = "medium"
+
+    return {
+        "blNumber": bl_number,
+        "riskLevel": overall,
+        "risks": [r["title"] for r in active_risks],
+        "activeRiskEvents": active_risks,
+    }
+
+
+@app.get("/api/risk/events")
+def get_risk_events():
+    """返回当前活跃的风险事件列表，GeoJSON FeatureCollection 格式"""
+    risk_path = OUTPUT_DIR / "risk_events.json"
+    if not risk_path.exists():
+        return {"type": "FeatureCollection", "features": []}
+
+    with open(risk_path, "r", encoding="utf-8") as f:
+        events = json.load(f)
+
+    today = datetime.utcnow().isoformat()[:10]
+    features = []
+    for ev in events:
+        if ev["end_date"] < today:
+            continue
+        features.append({
+            "type": "Feature",
+            "properties": {
+                "id": ev["id"],
+                "type": ev["type"],
+                "severity": ev["severity"],
+                "title": ev["title"],
+                "description": ev["description"][:150],
+                "radius_km": ev["radius_km"],
+                "start_date": ev["start_date"],
+                "end_date": ev["end_date"],
+                "source": ev["source"],
+            },
+            "geometry": ev["geometry"],
+        })
+
+    return {"type": "FeatureCollection", "features": features}
+
+
+@app.post("/api/shipments/{bl_number}/alert")
+def set_shipment_alert(bl_number: str, delay_days: int = Query(3, description="延迟超过几天通知")):
+    """为货物设置预警规则"""
+    data = get_mock_shipment(bl_number)
+    if not data:
+        raise HTTPException(status_code=404, detail=f"提单号 {bl_number} 未找到")
+
+    return {
+        "blNumber": bl_number,
+        "alertSet": True,
+        "delayThresholdDays": delay_days,
+        "message": f"当 {bl_number} 延误超过 {delay_days} 天时将发送通知",
+    }
+
+
 # ── 根路由 ─────────────────────────────────────────────────────────
 
 
@@ -587,5 +734,10 @@ def root():
             "POST /api/compliance/scan":               "合规扫描",
             "GET  /api/document/template/{doc_type}":  "单证模板（JSON Schema）",
             "POST /api/document/generate":             "单证生成（PDF）",
+            "GET  /api/shipments":                     "货物列表",
+            "GET  /api/shipments/{bl}/events":         "轨迹时间线",
+            "GET  /api/shipments/{bl}/risk":           "货物风险检查",
+            "GET  /api/risk/events":                   "风险事件地图(GeoJSON)",
+            "POST /api/shipments/{bl}/alert":          "设置预警",
         },
     }
