@@ -48,7 +48,9 @@ import {
   GeoJsonLayer,
   HeatmapLayer,
   IconLayer,
+  CPUGridLayer,
 } from "@deck.gl/layers";
+import { useQuery } from "@tanstack/react-query";
 import "maplibre-gl/dist/maplibre-gl.css";
 import dayjs from "dayjs";
 
@@ -513,7 +515,11 @@ const ControlTowerPage: React.FC = () => {
 
   // ── Deck.gl 图层 ────────────────────────────────────────────
 
-  // 风险事件 Scatterplot（受 dateRange 过滤）
+  // 获取当前缩放级别
+  const [viewState, setViewState] = useState({ zoom: 2 });
+  const isLowZoom = viewState.zoom < 3;
+
+  // 风险事件 GeoJsonLayer — 低缩放时隐藏详情，只显示聚合圆
   const riskLayer = useMemo(() => {
     if (!riskEvents.length && !riskFeatures.length) return null;
     const [rangeStart, rangeEnd] = dateRange;
@@ -532,31 +538,29 @@ const ControlTowerPage: React.FC = () => {
           type: "FeatureCollection" as const,
           features: filteredEvents.map((e) => ({
             type: "Feature" as const,
-            properties: e,
-            geometry: {
-              type: "Point" as const,
-              coordinates: e.coordinates,
-            },
+            properties: { ...e, id: e.id, severity: e.severity, radius_km: e.radius_km, title: e.title, type: e.type, description: e.description },
+            geometry: { type: "Point" as const, coordinates: e.coordinates },
           })),
         }
       : { type: "FeatureCollection" as const, features: filteredFeatures };
+
     return new GeoJsonLayer<any>({
       id: "risk-events",
       data,
-      pointRadiusMinPixels: 6,
-      pointRadiusMaxPixels: 80,
-      getPointRadius: (f) => (f.properties.radius_km || 200) * 1000,
+      pointRadiusMinPixels: isLowZoom ? 4 : 6,
+      pointRadiusMaxPixels: isLowZoom ? 30 : 80,
+      getPointRadius: (f) => isLowZoom ? 15 : (f.properties.radius_km || 200) * 1000,
       getFillColor: (d) => {
         const severity = d.properties.severity;
-        return SEVERITY_FILL[severity] || [59, 130, 246, 120];
+        return SEVERITY_FILL[severity] || [59, 130, 246, isLowZoom ? 80 : 120];
       },
       getLineColor: (d) => {
         const severity = d.properties.severity;
-        return SEVERITY_LINE[severity] || [59, 130, 246, 160];
+        return SEVERITY_LINE[severity] || [59, 130, 246, isLowZoom ? 120 : 160];
       },
-      lineWidthMinPixels: 1.5,
-      stroked: true,
-      pickable: true,
+      lineWidthMinPixels: isLowZoom ? 0.5 : 1.5,
+      stroked: !isLowZoom,
+      pickable: !isLowZoom,
       onClick: (info) => {
         if (!info.object) return;
         const props = info.object.properties;
@@ -610,6 +614,31 @@ const ControlTowerPage: React.FC = () => {
 
   const shipmentLayer = useMemo(() => {
     if (!shipments.length) return null;
+    // 数据聚合：20 个以上时使用 CPUGridLayer
+    const USE_GRID = shipments.length > 20;
+
+    if (USE_GRID) {
+      return new CPUGridLayer({
+        id: "shipments-grid",
+        data: shipments.map((s) => ({
+          coordinates: getPortCoords(s.origin),
+          status: s.status,
+          affected: affectedBls.has(s.bl_number),
+        })),
+        getPosition: (d: any) => d.coordinates,
+        cellSizePixels: 50,
+        colorScale: [60, 120, 180],
+        elevationScale: 50,
+        pickable: true,
+        getColorWeight: (d: any) => d.affected ? 3 : 1,
+        onClick: (info) => {
+          // Grid 模式下点击格子没有具体对象
+          message.info(`此区域有 ${info.count || '若干'} 票货物`);
+        },
+      });
+    }
+
+    const data = shipments.map((s) => ({
     const data = shipments.map((s) => ({
       bl: s.bl_number,
       status: s.status,
@@ -650,7 +679,7 @@ const ControlTowerPage: React.FC = () => {
     });
   }, [shipments, affectedShipments]);
 
-  // 航线弧线（选中货物时高亮）
+  // 高亮弧线
   const highlightArcLayer = useMemo(() => {
     if (!selectedShipment) return null;
     const s = selectedShipment;
@@ -666,7 +695,7 @@ const ControlTowerPage: React.FC = () => {
       widthMinPixels: 2,
       widthMaxPixels: 6,
     });
-  }, [selectedShipment, shipments]);
+  }, [selectedShipment]);
 
   const layers = useMemo(
     () => [riskLayer, shipmentLayer, highlightArcLayer].filter(Boolean),
@@ -771,6 +800,9 @@ const ControlTowerPage: React.FC = () => {
           bearing: 0,
         }}
         controller={true}
+        onViewStateChange={({ viewState: vs }: { viewState: any }) =>
+          setViewState({ zoom: vs.zoom })
+        }
         pickingRadius={5}
         getTooltip={({ object }: { object?: any }) => {
           if (!object) return null;
@@ -1032,7 +1064,7 @@ const ControlTowerPage: React.FC = () => {
                   <BellOutlined /> 实时预警
                 </span>
               ),
-              children: (
+              children: activeTab === "alerts" ? (
                 <div style={{ padding: "0 16px", overflow: "auto", height: panelHeight - 60 }}>
                   {filteredRiskFeatures.length === 0 ? (
                     <Text style={{ color: "#64748B" }}>暂无活跃预警</Text>
@@ -1151,7 +1183,7 @@ const ControlTowerPage: React.FC = () => {
                   <CarOutlined /> 我的货物
                 </span>
               ),
-              children: (
+              children: activeTab === "shipments" ? (
                 <div style={{ padding: "0 16px", overflow: "auto", height: panelHeight - 60 }}>
                   <Table
                     dataSource={shipments}
@@ -1192,7 +1224,7 @@ const ControlTowerPage: React.FC = () => {
                   <SafetyOutlined /> 风险订阅
                 </span>
               ),
-              children: (
+              children: activeTab === "subscribe" ? (
                 <div
                   style={{
                     padding: "0 16px",
