@@ -5,7 +5,7 @@
 import { create } from "zustand";
 import {
   fetchShipments as apiFetchShipments,
-  fetchRiskEventsGeoJson as apiFetchRiskEvents,
+  fetchRiskEvents as apiFetchRiskEvents,
   type ShipmentItem,
   type RiskGeoJson,
 } from "../api/controlTowerApi";

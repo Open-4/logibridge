@@ -1,5 +1,12 @@
 /**
  * controlTowerApi.ts — 控制塔相关 API 调用
+ *
+ * 公开接口:
+ *   fetchRiskEvents()            GET /api/risk/events
+ *   fetchShipments(params?)      GET /api/shipments
+ *   fetchShipmentEvents(id)      GET /api/shipments/{id}/events
+ *   fetchShipmentRisk(id)        GET /api/shipments/{id}/risk
+ *   setShipmentAlert(id, rules)  POST /api/shipments/{id}/alert
  */
 
 import client from "./client";
@@ -58,6 +65,12 @@ export interface ShipmentRiskResponse {
   }>;
 }
 
+export interface AlertRules {
+  delayDays?: number;
+  notifyOnException?: boolean;
+  email?: string;
+}
+
 export interface AlertResponse {
   blNumber: string;
   alertSet: boolean;
@@ -65,15 +78,27 @@ export interface AlertResponse {
   message: string;
 }
 
+export interface FetchShipmentsParams {
+  status?: string;
+  search?: string;
+}
+
 /** 获取货物列表 */
 export async function fetchShipments(
-  status?: string,
-  search?: string,
+  params?: FetchShipmentsParams,
 ): Promise<ShipmentItem[]> {
-  const params: Record<string, string> = {};
-  if (status) params.status = status;
-  if (search) params.search = search;
-  const { data } = await client.get<ShipmentItem[]>("/api/shipments", { params });
+  const query: Record<string, string> = {};
+  if (params?.status) query.status = params.status;
+  if (params?.search) query.search = params.search;
+  const { data } = await client.get<ShipmentItem[]>("/api/shipments", {
+    params: query,
+  });
+  return data;
+}
+
+/** 获取风险事件（GeoJSON 格式） */
+export async function fetchRiskEvents(): Promise<RiskGeoJson> {
+  const { data } = await client.get<RiskGeoJson>("/api/risk/events");
   return data;
 }
 
@@ -87,12 +112,6 @@ export async function fetchShipmentEvents(
   return data;
 }
 
-/** 获取风险事件地图 GeoJSON */
-export async function fetchRiskEventsGeoJson(): Promise<RiskGeoJson> {
-  const { data } = await client.get<RiskGeoJson>("/api/risk/events");
-  return data;
-}
-
 /** 检查货物受风险影响 */
 export async function fetchShipmentRisk(
   blNumber: string,
@@ -103,15 +122,18 @@ export async function fetchShipmentRisk(
   return data;
 }
 
-/** 设置预警 */
+/** 设置预警规则 */
 export async function setShipmentAlert(
   blNumber: string,
-  delayDays: number,
+  rules: AlertRules,
 ): Promise<AlertResponse> {
+  const params: Record<string, string | number> = {};
+  if (rules.delayDays) params.delay_days = rules.delayDays;
+  if (rules.notifyOnException) params.notify_exception = "true";
   const { data } = await client.post<AlertResponse>(
     `/api/shipments/${blNumber}/alert`,
     null,
-    { params: { delay_days: delayDays } },
+    { params },
   );
   return data;
 }
