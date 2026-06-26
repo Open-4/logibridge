@@ -41,3 +41,5 @@ server.crt
 server.key
 key.pem
 cert.pem
+# Root-level Render config (use data-pipeline/render.yaml for manual setup)
+/render.yaml
