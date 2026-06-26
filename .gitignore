@@ -37,3 +37,7 @@ Thumbs.db
 # Logs
 logs/
 *.log
+server.crt
+server.key
+key.pem
+cert.pem

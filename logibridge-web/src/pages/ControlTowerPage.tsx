@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ControlTowerPage.tsx — 控制塔全屏监控页面
  *
  * 布局：全屏地图 + 底部可拖拽面板
@@ -46,9 +46,7 @@ import {
   ArcLayer,
   ScatterplotLayer,
   GeoJsonLayer,
-  HeatmapLayer,
   IconLayer,
-  CPUGridLayer,
 } from "@deck.gl/layers";
 import { useQuery } from "@tanstack/react-query";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -235,17 +233,8 @@ const ControlTowerPage: React.FC = () => {
     });
   }, [riskFeatures, dateRange]);
 
-  // 过滤后更新 store 中的 riskEvents（用于地图联动）
-  useEffect(() => {
-    // 仅更新 store 中的 riskEvents 为过滤后的
-    const filtered = riskEvents.filter((e) => {
-      const evStart = new Date(e.start_date);
-      const evEnd = new Date(e.end_date);
-      const [s, en] = dateRange;
-      return evStart <= en && evEnd >= s;
-    });
-    // 从 store 直接获取更新方法
-  }, [dateRange, riskEvents]);
+  // 地图联动已通过 filteredRiskFeatures 实现
+  // (useEffect removed — store 中的 riskEvents 保持不变，地图数据使用 filteredRiskFeatures)
 
   // ── 轮询 & 最后更新时间 ──────────────────────────────────────
   const [lastLoaded, setLastLoaded] = useState<Date | null>(null);
@@ -312,15 +301,6 @@ const ControlTowerPage: React.FC = () => {
       setPanelHeight(Math.max(panelHeight, 300));
     }
   }, [filterInTab2, affectedShipments, panelHeight]);
-
-  const loadRiskEvents = async () => {
-    try {
-      const geo = await fetchRiskEvents();
-      setRiskFeatures(geo.features ?? []);
-    } catch {
-      console.warn("加载风险事件地图数据失败");
-    }
-  };
 
   // ── 联动 1: 点击风险 → Tab1 高亮 ──────────────────────────
 
@@ -614,31 +594,7 @@ const ControlTowerPage: React.FC = () => {
 
   const shipmentLayer = useMemo(() => {
     if (!shipments.length) return null;
-    // 数据聚合：20 个以上时使用 CPUGridLayer
-    const USE_GRID = shipments.length > 20;
 
-    if (USE_GRID) {
-      return new CPUGridLayer({
-        id: "shipments-grid",
-        data: shipments.map((s) => ({
-          coordinates: getPortCoords(s.origin),
-          status: s.status,
-          affected: affectedBls.has(s.bl_number),
-        })),
-        getPosition: (d: any) => d.coordinates,
-        cellSizePixels: 50,
-        colorScale: [60, 120, 180],
-        elevationScale: 50,
-        pickable: true,
-        getColorWeight: (d: any) => d.affected ? 3 : 1,
-        onClick: (info) => {
-          // Grid 模式下点击格子没有具体对象
-          message.info(`此区域有 ${info.count || '若干'} 票货物`);
-        },
-      });
-    }
-
-    const data = shipments.map((s) => ({
     const data = shipments.map((s) => ({
       bl: s.bl_number,
       status: s.status,
@@ -1052,6 +1008,7 @@ const ControlTowerPage: React.FC = () => {
                 }}
                 style={{ color: "#94A3B8" }}
               />
+            </Space>
           }
           items={[
             // ════════════════════════════════════════════
@@ -1170,7 +1127,7 @@ const ControlTowerPage: React.FC = () => {
                     />
                   )}
                 </div>
-              ),
+              ) : null,
             },
 
             // ════════════════════════════════════════════
@@ -1211,7 +1168,7 @@ const ControlTowerPage: React.FC = () => {
                     style={{ background: "transparent" }}
                   />
                 </div>
-              ),
+              ) : null,
             },
 
             // ════════════════════════════════════════════
@@ -1310,12 +1267,12 @@ const ControlTowerPage: React.FC = () => {
                     </Button>
                   </Space>
                 </div>
-              ),
+              ) : null,
             },
           ]}
           style={{ flex: 1, display: "flex", flexDirection: "column" }}
         />
-      </div>
+      </motion.div>
     </div>
   );
 };

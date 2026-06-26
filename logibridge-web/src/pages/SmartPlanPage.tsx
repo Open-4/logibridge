@@ -29,6 +29,7 @@ import {
   Empty,
   Spin,
   Divider,
+  message,
 } from "antd";
 import {
   ThunderboltOutlined,
@@ -126,7 +127,7 @@ const CN_PORT_CODES: Record<string, string[]> = {
   "杰贝阿里": ["AEQWE"],
   "达曼": ["SADMM"],
   "德班": ["ZADUR"],
-  "蒙巴萨": ["ZADUR"],
+  "蒙巴萨": ["KEMBA"],
   "卡亚俄": ["PECLL"],
   "香港": ["HKHKG"],
   "巴生港": ["MYPKG"],
@@ -402,6 +403,7 @@ const SmartPlanPage: React.FC = () => {
       setResults(plans);
     } catch (err: unknown) {
       console.error("推演失败", err);
+      message.error(err instanceof Error ? err.message : "推演失败，请检查网络连接后重试");
       setResults([]);
     }
   };
@@ -645,7 +647,7 @@ const SmartPlanPage: React.FC = () => {
               size="large"
               tip="AI 正在计算最优路线..."
             >
-              {/* Spin 默认需要 children 才能显示 tip 气泡 */}
+              <div style={{ padding: 1 }} />
             </Spin>
             <div
               style={{

@@ -12,6 +12,8 @@ import ProfilePage from "./pages/ProfilePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
+import NotFoundPage from "./pages/NotFoundPage";
 import { useAuthStore } from "./store/useAuthStore";
 import "./styles/global.css";
 
@@ -88,6 +90,9 @@ function AppInner() {
         <Route path="/admin/consultations" element={<AdminConsultationsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
+
+      {/* 404 页面 */}
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

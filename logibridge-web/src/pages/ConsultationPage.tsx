@@ -58,16 +58,17 @@ import {
   InboxOutlined,
   MessageOutlined,
   SwapOutlined,
+  LinkOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/zh-cn";
 import {
   createConsultation,
-  listConsultations,
-  getConsultation,
+  fetchConsultations,
+  fetchConsultationMessages,
   sendMessage,
-  getContext,
+  fetchContext,
   searchKnowledge,
   closeConsultation,
   type Consultation,
@@ -552,7 +553,7 @@ const ConsultationPage: React.FC = () => {
   const loadSessions = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listConsultations();
+      const data = await fetchConsultations();
       setSessions(data);
     } catch (err) {
       console.error("加载会话列表失败:", err);
@@ -585,7 +586,7 @@ const ConsultationPage: React.FC = () => {
     setRightSidebarOpen(false);
     setContextData(null);
     try {
-      const data = await getConsultation(id);
+      const data = await fetchConsultationMessages(id);
       setActiveConsultation(data);
       loadSessions(); // 后台刷新列表
     } catch (err) {
@@ -597,7 +598,7 @@ const ConsultationPage: React.FC = () => {
   // ── 加载上下文 ────────────────────────────────────────────────────
   const loadContext = useCallback(async (id: string) => {
     try {
-      const ctx = await getContext(id);
+      const ctx = await fetchContext(id);
       setContextData(ctx);
     } catch {
       // ignore
@@ -638,7 +639,7 @@ const ConsultationPage: React.FC = () => {
       await sendMessage(activeId, { content: text, metadata });
 
       // 重新加载完整会话（包含 AI 回复）
-      const updated = await getConsultation(activeId);
+      const updated = await fetchConsultationMessages(activeId);
       setActiveConsultation(updated);
 
       // 更新列表中的最后消息预览

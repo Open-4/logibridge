@@ -1,4 +1,4 @@
-/**
+﻿/**
  * CompliancePage.tsx — 合规体检页面
  *
  * 布局：左栏 40% (货物信息 + 风险结果)，右栏 60% (单证清单 + 智能填单)
@@ -56,12 +56,8 @@ import {
   COUNTRIES,
   type ComplianceFormData,
 } from "../store/useComplianceStore";
-import {
-  getDocTemplate,
-  generateDocument,
-  searchHsCodes,
-  type DocTemplate,
-} from "../api/complianceApi";
+import { getDocTemplate, generateDocument, type DocTemplate } from "../api/complianceApi";
+import { searchHsCodes } from "../api/planApi";
 import emptyStateImg from "../assets/images/empty-state.png";
 
 const { Text, Title } = Typography;
@@ -401,7 +397,7 @@ const CompliancePage: React.FC = () => {
           <Col xs={24} lg={{ span: 9, push: 0 }}>
             {/* ── 卡片 1：货物信息表单 ── */}
             <Card
-              title={<span style={{ color: "#F1F5F9 }}>货物信息</span>}
+              title={<span style={{ color: "#F1F5F9" }}>货物信息</span>}
               style={{ background: "#1E293B", borderColor: "#334155", marginBottom: 24 }}
             >
               <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -671,7 +667,7 @@ const CompliancePage: React.FC = () => {
               右栏 60%：单证清单 + 智能填单
               ═══════════════════════════════════════════════════════════ */}
           <Col xs={24} lg={{ span: 14, push: 1 }}>
-            {loading && !scanResult ? (
+            {loading && !scanResult ? 
               /* ── 加载中：Skeleton 骨架屏 ── */
               <div>
                 <Card
@@ -693,7 +689,7 @@ const CompliancePage: React.FC = () => {
                   <Skeleton active paragraph={{ rows: 1 }} />
                 </Card>
               </div>
-            ) : (!scanResult && !loading ? (
+             : !scanResult && !loading ? 
               /* ── 空状态 ── */
               <div
                 style={{
@@ -719,7 +715,7 @@ const CompliancePage: React.FC = () => {
                   在左侧输入货物信息并点击「开始合规扫描」
                 </Text>
               </div>
-            ) : (
+             : 
               <>
                 {/* ── 卡片 3：必需单证清单 ── */}
                 <Card
@@ -915,7 +911,7 @@ const CompliancePage: React.FC = () => {
                   </Modal>
                 </Card>
               </>
-            )}
+            }
           </Col>
         </Row>
       </div>

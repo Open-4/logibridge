@@ -1,0 +1,13 @@
+services:
+  # ── Python Backend API (FastAPI) ──────────────────────────────────
+  - type: web
+    name: logibridge-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: LOGIBRIDGE_JWT_SECRET
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.0

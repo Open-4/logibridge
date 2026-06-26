@@ -15,7 +15,6 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 
 # ── JWT 配置 ────────────────────────────────────────────────────────────────
@@ -27,7 +26,22 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 默认 24 小时（开发阶段方便测试）
 
 # ── 密码上下文 ──────────────────────────────────────────────────────────────
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 使用 bcrypt（不使用 passlib 的 CryptContext 以避免 bcrypt 5.x 兼容问题）
+import hashlib
+import base64
+
+def hash_password(password: str) -> str:
+    """使用 bcrypt 对密码进行哈希"""
+    import bcrypt
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """验证密码是否匹配"""
+    import bcrypt
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
 # ── Bearer token 提取器 ────────────────────────────────────────────────────
 bearer_scheme = HTTPBearer(auto_error=False)  # MVP 阶段先不强制认证
@@ -77,12 +91,17 @@ def _new_id() -> str:
 
 def hash_password(password: str) -> str:
     """使用 bcrypt 对密码进行哈希"""
-    return pwd_context.hash(password)
+    import bcrypt
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """验证密码是否匹配"""
-    return pwd_context.verify(plain_password, hashed_password)
+    import bcrypt
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
 
 # ── JWT 操作 ────────────────────────────────────────────────────────────────

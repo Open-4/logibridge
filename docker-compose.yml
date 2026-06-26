@@ -10,6 +10,12 @@ services:
     environment:
       - LOGIBRIDGE_JWT_SECRET=${JWT_SECRET:-change_this_in_production}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   web:
     build:
@@ -19,11 +25,11 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      # certbot 证书持久化
       - certbot-www:/var/www/certbot
       - certbot-etc:/etc/letsencrypt
     depends_on:
-      - server
+      server:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
