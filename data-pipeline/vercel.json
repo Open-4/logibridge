@@ -1,5 +1,6 @@
 {
+  "buildCommand": false,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api_server" }
+    { "source": "/(.*)", "destination": "/" }
   ]
 }

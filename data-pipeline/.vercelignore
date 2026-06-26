@@ -1,14 +1,7 @@
 # Python virtual env
 venv/
-
-# PyCharm
-.idea/
-
-# __pycache__
 __pycache__/
 *.pyc
-
-# SSL certs (local dev)
-*.crt
-*.key
 *.pem
+*.key
+*.crt
