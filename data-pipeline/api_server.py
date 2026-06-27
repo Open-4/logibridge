@@ -793,6 +793,15 @@ class Message(BaseModel):
 CONSULTATIONS: dict[str, dict] = {}  # id -> consultation dict
 MESSAGES: dict[str, list[dict]] = {}  # consultationId -> list of message dicts
 
+# ── 从 auth 中加载持久化存储 ──────────────────────────────────────
+try:
+    from auth import get_consultation_store
+    _c_store, _m_store = get_consultation_store()
+    CONSULTATIONS = _c_store
+    MESSAGES = _m_store
+except Exception:
+    pass
+
 # ── 固定用户（MVP 阶段） ──────────────────────────────────────────
 
 DEFAULT_USER_ID = "user-mvp-001"
@@ -1335,7 +1344,9 @@ def close_consultation(consultation_id: str):
 def register(req: UserCreate):
     """注册新用户：验证邮箱唯一，创建用户，返回 token"""
     # 检查邮箱是否已被注册
-    if req.email.lower().strip() in USERS_BY_EMAIL:
+    from auth import get_user_by_email
+    existing = get_user_by_email(req.email)
+    if existing:
         raise HTTPException(status_code=409, detail="该邮箱已被注册")
 
     # 密码长度校验
