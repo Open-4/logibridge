@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 import uuid
-import fcntl
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -108,8 +107,10 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     import bcrypt
-    try: return bcrypt.checkpw(plain.encode(), hashed.encode())
-    except: return False
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except Exception:
+        return False
 
 # ── JWT ─────────────────────────────────────────────────────────────
 
