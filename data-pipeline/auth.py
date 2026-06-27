@@ -28,7 +28,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 # ── JSON 文件持久化（Vercel /tmp 可写）───────────────
-_DATA_DIR = os.environ.get("VERCEL_DATA_DIR", "/tmp")
+_DATA_DIR = "/tmp"
 _STORE_FILE = os.path.join(_DATA_DIR, "logibridge_store.json")
 
 def _load_store():
