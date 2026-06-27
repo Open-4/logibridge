@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -77,7 +77,7 @@ class VesselInfo(BaseModel):
     currentPosition: Position
     currentSpeed: float
     heading: int
-    lastUpdated: datetime = Field(default_factory=datetime.utcnow)
+    lastUpdated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ShipmentTrackingResponse(BaseModel):

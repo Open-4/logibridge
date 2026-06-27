@@ -24,10 +24,24 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string;
 
-/** MapTiler 暗色样式（需要免费密钥） */
+/** 暗色地图：优先 MapTiler，其次用 OpenStreetMap 免费光栅瓦片（无密钥） */
 const MAP_STYLE = MAPTILER_KEY
   ? `https://api.maptiler.com/maps/streets-v2-dark/tiles.json?key=${MAPTILER_KEY}`
-  : "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
+  : {
+      version: 8,
+      glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
+      sources: {
+        osm: {
+          type: "raster",
+          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          attribution: "© OpenStreetMap contributors",
+        },
+      },
+      layers: [
+        { id: "osm-layer", type: "raster", source: "osm", minzoom: 0, maxzoom: 19 },
+      ],
+    };
 
 // ── 工具函数 ──────────────────────────────────────────────────────────
 

@@ -68,9 +68,24 @@ const { Text, Title } = Typography;
 // ── 常量 ──────────────────────────────────────────────────────────
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string;
+/** 暗色地图：优先 MapTiler，其次用 OpenFreeMap 免费风格（无需密钥） */
 const MAP_STYLE = MAPTILER_KEY
   ? `https://api.maptiler.com/maps/streets-v2-dark/tiles.json?key=${MAPTILER_KEY}`
-  : "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
+  : {
+      version: 8,
+      glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
+      sources: {
+        osm: {
+          type: "raster",
+          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          attribution: "© OpenStreetMap contributors",
+        },
+      },
+      layers: [
+        { id: "osm-layer", type: "raster", source: "osm", minzoom: 0, maxzoom: 19 },
+      ],
+    };
 
 const SEVERITY_COLOR: Record<string, string> = {
   critical: "#EF4444",

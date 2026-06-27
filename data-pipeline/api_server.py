@@ -667,7 +667,7 @@ def get_shipment_risk(bl_number: str):
         with open(risk_path, "r", encoding="utf-8") as f:
             events = json.load(f)
 
-        today = datetime.utcnow().isoformat()
+        today = datetime.now(timezone.utc).isoformat()
         for ev in events:
             if ev["end_date"] < today[:10]:
                 continue
@@ -709,7 +709,7 @@ def get_risk_events():
     with open(risk_path, "r", encoding="utf-8") as f:
         events = json.load(f)
 
-    today = datetime.utcnow().isoformat()[:10]
+    today = datetime.now(timezone.utc).isoformat()[:10]
     features = []
     for ev in events:
         if ev["end_date"] < today:
