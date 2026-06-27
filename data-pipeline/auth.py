@@ -29,15 +29,28 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 # ── JSON 文件持久化（Vercel /tmp 可写）───────────────
 _DATA_DIR = "/tmp"
 _STORE_FILE = os.path.join(_DATA_DIR, "logibridge_store.json")
+_LOG_FILE = os.path.join(_DATA_DIR, "auth_debug.log")
+
+def _log(msg: str):
+    """写入调试日志"""
+    try:
+        with open(_LOG_FILE, "a") as lf:
+            from datetime import datetime, timezone
+            lf.write(f"{datetime.now(timezone.utc).isoformat()} {msg}\n")
+    except Exception:
+        pass
 
 def _load_store():
     """加载持久化数据，失败返回空字典"""
     try:
+        _log(f"_load_store: checking path={_STORE_FILE} exists={os.path.exists(_STORE_FILE)}")
         if os.path.exists(_STORE_FILE):
             with open(_STORE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
+                data = json.load(f)
+            _log(f"_load_store: loaded {len(data.get('users',{}))} users")
+            return data
+    except Exception as e:
+        _log(f"_load_store ERROR: {e}")
     return {"users": {}, "users_by_email": {}, "settings": {}, "api_keys": {},
             "consultations": {}, "messages": {}}
 
@@ -47,8 +60,9 @@ def _save_store(data: dict):
         os.makedirs(_DATA_DIR, exist_ok=True)
         with open(_STORE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-    except Exception:
-        pass  # 静默失败，至少内存中有数据
+        _log(f"_save_store: saved {len(data.get('users',{}))} users, filesize={os.path.getsize(_STORE_FILE)}")
+    except Exception as e:
+        _log(f"_save_store ERROR: {e}")
 
 # ── 全局存储（服务启动时加载，运行时操作，每次写操作后持久化）──
 _store = _load_store()
@@ -238,4 +252,4 @@ _init_store = _load_store()
 USERS = _init_store.get("users", {})
 USERS_BY_EMAIL = _init_store.get("users_by_email", {})
 USER_SETTINGS = _init_store.get("settings", {})
-print(f"[auth] 启动加载: {len(USERS)} 用户, {len(USER_SETTINGS)} 设置")
+_log(f"模块初始化完成: {len(USERS)} 用户, {len(USERS_BY_EMAIL)} 邮箱索引, tmp_writable={os.access('/tmp', os.W_OK)}")
