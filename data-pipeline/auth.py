@@ -15,7 +15,6 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from contextlib import contextmanager
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -31,7 +30,10 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 # ── SQLite 数据库 ───────────────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logibridge.db")
+# Vercel Serverless 只有 /tmp 可写，生产环境用 /tmp，本地开发用当前目录
+import tempfile
+_DB_DIR = "/tmp" if os.path.exists("/tmp") and os.access("/tmp", os.W_OK) else os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(_DB_DIR, "logibridge.db")
 _local = threading.local()
 
 
