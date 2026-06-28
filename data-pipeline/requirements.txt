@@ -24,3 +24,4 @@ idna==3.18
 six==1.17.0
 tzdata==2026.2
 libsql-client>=0.3.0
+psycopg2-binary>=2.9.0
