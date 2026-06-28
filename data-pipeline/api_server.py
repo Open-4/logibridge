@@ -791,15 +791,6 @@ class Message(BaseModel):
 CONSULTATIONS: dict[str, dict] = {}  # id -> consultation dict
 MESSAGES: dict[str, list[dict]] = {}  # consultationId -> list of message dicts
 
-# ── 从 auth 中加载持久化存储 ──────────────────────────────────────
-try:
-    from auth import get_consultation_store
-    _c_store, _m_store = get_consultation_store()
-    CONSULTATIONS = _c_store
-    MESSAGES = _m_store
-except Exception:
-    pass
-
 # ── 固定用户（MVP 阶段） ──────────────────────────────────────────
 
 DEFAULT_USER_ID = "user-mvp-001"
