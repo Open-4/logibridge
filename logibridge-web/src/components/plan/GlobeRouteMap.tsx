@@ -24,10 +24,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY as string;
 
-/** 免费地图风格：MapTiler（需密钥）→ MapLibre 官方 DEMO 瓦片（免密钥、永远有效） */
+/** 免费地图风格 */
 const MAP_STYLE = MAPTILER_KEY
   ? `https://api.maptiler.com/maps/streets-v2-dark/tiles.json?key=${MAPTILER_KEY}`
-  : "https://demotiles.maplibre.org/style.json";
+  : "https://tiles.openfreemap.org/styles/liberty";
 
 // ── 工具函数 ──────────────────────────────────────────────────────────
 
