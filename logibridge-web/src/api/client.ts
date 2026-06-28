@@ -9,7 +9,7 @@ import axios from "axios";
 import { getToken, clearAuth } from "./authApi";
 
 const client = axios.create({
-  baseURL: "https://data-pipeline-sigma.vercel.app",
+  baseURL: "/api",
   timeout: 30_000,
   headers: { "Content-Type": "application/json" },
 });
@@ -29,9 +29,7 @@ client.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       clearAuth();
-      // 避免在无 window 环境（SSR/测试）中报错
       if (typeof window !== "undefined") {
-        // 仅在不在登录/注册页时跳转，防止重复重定向
         const path = window.location.pathname;
         if (path !== "/login" && path !== "/register") {
           window.location.href = "/login";

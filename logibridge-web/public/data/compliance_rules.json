@@ -1,0 +1,786 @@
+{
+  "meta": {
+    "name": "全球贸易合规知识库",
+    "version": "1.0.1",
+    "last_updated": "2026-06-21",
+    "sources": [
+      "USTR HTS (hts.usitc.gov) — 301 / 232 条款",
+      "EU TARIC (ec.europa.eu/taxation_customs/dds2/taric)",
+      "日本海关 (customs.go.jp)",
+      "泰国海关 (customs.go.th)",
+      "英国贸易关税 (trade-tariff.service.gov.uk)",
+      "中国贸易救济信息网 (cacs.mofcom.gov.cn)",
+      "OECD Tax Database"
+    ],
+    "disclaimer": "本数据仅供参考，实际税率与合规要求以各国官方最新公告为准。",
+    "coverage": {
+      "countries": [
+        "US",
+        "DE",
+        "JP",
+        "TH",
+        "GB"
+      ],
+      "anti_dumping_total": 32,
+      "additional_tariffs_total": 29
+    }
+  },
+  "rules": {
+    "US": {
+      "country_code": "US",
+      "country_name": "美国",
+      "mfn_rate": 3.4,
+      "additional_tariffs": [
+        {
+          "hs_pattern": ".*",
+          "rate": 20.0,
+          "reason": "芬太尼关税",
+          "effective_date": "2026-01-01"
+        },
+        {
+          "hs_pattern": ".*",
+          "rate": 10.0,
+          "reason": "对等关税",
+          "effective_date": "2026-04-01"
+        },
+        {
+          "hs_pattern": "85.*",
+          "rate": 25.0,
+          "reason": "301条款（半导体、电池等）",
+          "effective_date": "2025-08-01"
+        },
+        {
+          "hs_pattern": "72.*|73.*",
+          "rate": 25.0,
+          "reason": "232条款（钢铝）",
+          "effective_date": "2018-03-23"
+        },
+        {
+          "hs_pattern": "8703.*",
+          "rate": 100.0,
+          "reason": "301条款（电动汽车）",
+          "effective_date": "2025-05-14"
+        },
+        {
+          "hs_pattern": "8708.*",
+          "rate": 25.0,
+          "reason": "232条款（汽车零部件）",
+          "effective_date": "2025-08-01"
+        },
+        {
+          "hs_pattern": "74.*",
+          "rate": 50.0,
+          "reason": "232条款（铜材）",
+          "effective_date": "2025-08-01"
+        },
+        {
+          "hs_pattern": "8481",
+          "rate": 25.0,
+          "reason": "301条款 List 1",
+          "effective_date": "2018-07-06"
+        },
+        {
+          "hs_pattern": "8483",
+          "rate": 25.0,
+          "reason": "301条款 List 1",
+          "effective_date": "2018-07-06"
+        },
+        {
+          "hs_pattern": "8409",
+          "rate": 25.0,
+          "reason": "301条款 List 1",
+          "effective_date": "2018-07-06"
+        },
+        {
+          "hs_pattern": "8413",
+          "rate": 25.0,
+          "reason": "301条款 List 1",
+          "effective_date": "2018-07-06"
+        },
+        {
+          "hs_pattern": "8414",
+          "rate": 25.0,
+          "reason": "301条款 List 1",
+          "effective_date": "2018-07-06"
+        },
+        {
+          "hs_pattern": "8421",
+          "rate": 25.0,
+          "reason": "301条款 List 1",
+          "effective_date": "2018-07-06"
+        },
+        {
+          "hs_pattern": "8504",
+          "rate": 25.0,
+          "reason": "301条款 List 1",
+          "effective_date": "2018-07-06"
+        },
+        {
+          "hs_pattern": "850440",
+          "rate": 25.0,
+          "reason": "301条款 List 1（电源适配器）",
+          "effective_date": "2018-07-06"
+        },
+        {
+          "hs_pattern": "620462",
+          "rate": 7.5,
+          "reason": "301条款 List 4B（棉制女裤）",
+          "effective_date": "2019-09-01"
+        },
+        {
+          "hs_pattern": "8471",
+          "rate": 25.0,
+          "reason": "301条款 List 4A",
+          "effective_date": "2019-09-01"
+        },
+        {
+          "hs_pattern": "8517",
+          "rate": 25.0,
+          "reason": "301条款 List 4A",
+          "effective_date": "2019-09-01"
+        },
+        {
+          "hs_pattern": "8541",
+          "rate": 25.0,
+          "reason": "301条款 List 4A",
+          "effective_date": "2019-09-01"
+        },
+        {
+          "hs_pattern": "8542",
+          "rate": 25.0,
+          "reason": "301条款 List 4A",
+          "effective_date": "2019-09-01"
+        },
+        {
+          "hs_pattern": "9503",
+          "rate": 25.0,
+          "reason": "301条款 List 4A",
+          "effective_date": "2019-09-01"
+        },
+        {
+          "hs_pattern": "6204",
+          "rate": 7.5,
+          "reason": "301条款 List 4B",
+          "effective_date": "2019-09-01"
+        },
+        {
+          "hs_pattern": "4202",
+          "rate": 7.5,
+          "reason": "301条款 List 4B",
+          "effective_date": "2019-09-01"
+        },
+        {
+          "hs_pattern": "9401",
+          "rate": 7.5,
+          "reason": "301条款 List 4B",
+          "effective_date": "2019-09-01"
+        },
+        {
+          "hs_pattern": "9403",
+          "rate": 25.0,
+          "reason": "301条款 List 3",
+          "effective_date": "2019-06-15"
+        },
+        {
+          "hs_pattern": "9404",
+          "rate": 7.5,
+          "reason": "301条款 List 4B",
+          "effective_date": "2019-09-01"
+        }
+      ],
+      "anti_dumping": [
+        {
+          "hs_range": "2905.49.4000",
+          "country_applied": "CN",
+          "duty_rate": 25.0,
+          "expiry_date": "2031-02-01",
+          "status": "双反终裁生效",
+          "product": "赤藓糖醇"
+        },
+        {
+          "hs_range": "7308.90.9590",
+          "country_applied": "CN",
+          "duty_rate": 129.7,
+          "expiry_date": "2031-03-01",
+          "status": "终裁生效",
+          "product": "临时钢制围栏（倾销129.7%+补贴49.19%-178.97%）"
+        },
+        {
+          "hs_range": "3923.10.9000",
+          "country_applied": "CN",
+          "duty_rate": 145.91,
+          "expiry_date": "2031-01-01",
+          "status": "终裁生效",
+          "product": "聚丙烯瓦楞箱（倾销83.64%+补贴62.27%）"
+        },
+        {
+          "hs_range": "2922.41.0090",
+          "country_applied": "CN",
+          "duty_rate": 59.94,
+          "expiry_date": "2027-01-01",
+          "status": "初裁生效",
+          "product": "L-赖氨酸（补贴39.5%-80.37%）"
+        },
+        {
+          "hs_range": "2934.20.8000",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "调查中（2026年5月立案）",
+          "product": "N-环己基苯并噻唑-2-亚磺酰胺(CBS)"
+        },
+        {
+          "hs_range": "4823.69.0040",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "双反终裁（2025年2月）",
+          "product": "纸盘"
+        }
+      ],
+      "vat": {
+        "standard_rate": 0.0,
+        "reduced_rate": null,
+        "threshold": null,
+        "calculation_base": "无联邦VAT，各州销售税另计（0-10%）",
+        "currency": "USD"
+      },
+      "required_certs": [
+        {
+          "cert_name": "FDA注册",
+          "applies_to_hs_pattern": ".*",
+          "description": "食品、医疗器械、化妆品类需完成FDA企业注册与产品列名",
+          "mandatory": true,
+          "authority": "FDA"
+        },
+        {
+          "cert_name": "FCC认证",
+          "applies_to_hs_pattern": "85.*",
+          "description": "无线设备、电脑等电子产品的电磁兼容性认证",
+          "mandatory": true,
+          "authority": "FCC"
+        },
+        {
+          "cert_name": "UL/ETL",
+          "applies_to_hs_pattern": "84.*|85.*",
+          "description": "家电、电线电缆安全认证（非强制但市场普遍要求）",
+          "mandatory": false,
+          "authority": "UL/ETL"
+        },
+        {
+          "cert_name": "CPSC合规",
+          "applies_to_hs_pattern": "95.*",
+          "description": "儿童产品需符合ASTM标准及CPSC要求",
+          "mandatory": true,
+          "authority": "CPSC"
+        }
+      ],
+      "special_docs": [
+        {
+          "doc_name": "原产地证明",
+          "description": "部分产品需提供Form A或FTA原产地证以适用优惠税率",
+          "mandatory": false
+        },
+        {
+          "doc_name": "进口商报关委托书",
+          "description": "必须由美国报关行或进口商代理申报",
+          "mandatory": true
+        },
+        {
+          "doc_name": "反倾销保证金",
+          "description": "涉反倾销产品需缴纳保证金，金额详见CBP裁定",
+          "mandatory": true
+        }
+      ],
+      "notes": "美国无联邦VAT；小额包裹（原≤$800免税）已于2025年8月取消，现征收54%从价税或$100/件从量税。最终关税=MFN+301+232+芬太尼20%+对等10%+双反。"
+    },
+    "DE": {
+      "country_code": "DE",
+      "country_name": "德国（欧盟）",
+      "mfn_rate": 4.2,
+      "additional_tariffs": [
+        {
+          "hs_pattern": "72.*|73.*|76.*",
+          "rate": 0.0,
+          "reason": "CBAM碳边境调节机制（需申报碳排放数据，2026年起征收）",
+          "effective_date": "2026-01-01"
+        }
+      ],
+      "anti_dumping": [
+        {
+          "hs_range": "3504 00 90 91",
+          "country_applied": "CN",
+          "duty_rate": 53.95,
+          "expiry_date": "2029-04-01",
+          "status": "初裁生效",
+          "product": "豌豆蛋白（40.5%-67.4%）"
+        },
+        {
+          "hs_range": "2917 12 00 10",
+          "country_applied": "CN",
+          "duty_rate": 35.7,
+          "expiry_date": "2029-05-01",
+          "status": "终裁生效",
+          "product": "己二酸（29.1%-42.3%）"
+        },
+        {
+          "hs_range": "2931 49 80 60",
+          "country_applied": "CN",
+          "duty_rate": 201.15,
+          "expiry_date": "2029-05-01",
+          "status": "初裁生效",
+          "product": "烷基膦酸及其钠盐（182.9%-219.4%）"
+        },
+        {
+          "hs_range": "2918 15 00 11",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "日落复审中（2026年4月立案）",
+          "product": "柠檬酸/柠檬酸钠"
+        },
+        {
+          "hs_range": "2922 42 00 20",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "日落复审中（2026年4月立案）",
+          "product": "味精"
+        },
+        {
+          "hs_range": "7411 10 90 10",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "调查中（2026年3月立案）",
+          "product": "铜管"
+        },
+        {
+          "hs_range": "2916 12 00 15",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "调查中（2026年3月立案）",
+          "product": "丙烯酸酯"
+        },
+        {
+          "hs_range": "8708 70",
+          "country_applied": "CN",
+          "duty_rate": 58.35,
+          "expiry_date": "2029-02-01",
+          "status": "日落复审终裁生效",
+          "product": "钢制轮毂（50.3%-66.4%）"
+        },
+        {
+          "hs_range": "2811 19 80 60",
+          "country_applied": "CN",
+          "duty_rate": 122.8,
+          "expiry_date": "2029-03-01",
+          "status": "终裁生效",
+          "product": "亚磷酸"
+        },
+        {
+          "hs_range": "9403 20 80 20",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "调查中（2026年6月立案）",
+          "product": "螺栓连接式钢制货架"
+        },
+        {
+          "hs_range": "3907 99 80 50",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "调查中（2026年6月立案）",
+          "product": "脂肪族-芳香族共聚酯"
+        },
+        {
+          "hs_range": "2833 4000",
+          "country_applied": "CN",
+          "duty_rate": 48.15,
+          "expiry_date": "2029-01-01",
+          "status": "日落复审终裁",
+          "product": "过硫酸盐（24.5%-71.8%）"
+        },
+        {
+          "hs_range": "2001 90 30",
+          "country_applied": "CN",
+          "duty_rate": 42.65,
+          "expiry_date": "2029-02-01",
+          "status": "终裁生效",
+          "product": "预制或腌制甜玉米粒（31%-54.3%）"
+        },
+        {
+          "hs_range": "2923 10 00",
+          "country_applied": "CN",
+          "duty_rate": 102.95,
+          "expiry_date": "2028-12-01",
+          "status": "终裁生效",
+          "product": "氯化胆碱（90%-115.9%）"
+        },
+        {
+          "hs_range": "8712",
+          "country_applied": "CN",
+          "duty_rate": 48.5,
+          "expiry_date": "2027-01-01",
+          "status": "终裁（EU Reg. 2019/1379）",
+          "product": "自行车"
+        },
+        {
+          "hs_range": "854140",
+          "country_applied": "CN",
+          "duty_rate": 41.3,
+          "expiry_date": "2027-01-01",
+          "status": "终裁（EU Reg. 2017/366）",
+          "product": "光伏电池/组件（单晶硅、多晶硅）"
+        },
+        {
+          "hs_range": "6911|6912",
+          "country_applied": "CN",
+          "duty_rate": 36.1,
+          "expiry_date": "2026-01-01",
+          "status": "终裁（EU Reg. 2013/412）",
+          "product": "陶瓷餐具"
+        },
+        {
+          "hs_range": "7209|7210",
+          "country_applied": "CN",
+          "duty_rate": 20.9,
+          "expiry_date": "2028-01-01",
+          "status": "终裁（EU Reg. 2021/109）",
+          "product": "冷轧/镀锌钢板（19.7%-22.1%）"
+        }
+      ],
+      "vat": {
+        "standard_rate": 19.0,
+        "reduced_rate": 7.0,
+        "threshold": null,
+        "calculation_base": "CIF + 关税",
+        "currency": "EUR"
+      },
+      "required_certs": [
+        {
+          "cert_name": "CE认证",
+          "applies_to_hs_pattern": "84.*|85.*|94.*|95.*",
+          "description": "强制性安全标志，覆盖电子电器、机械、玩具类产品",
+          "mandatory": true,
+          "authority": "欧盟委员会"
+        },
+        {
+          "cert_name": "新机械法规(EU)2023/1230",
+          "applies_to_hs_pattern": "84.*",
+          "description": "2026年1月1日起全面实施，半成品机械也纳入管控",
+          "mandatory": true,
+          "authority": "欧盟委员会"
+        },
+        {
+          "cert_name": "REACH法规",
+          "applies_to_hs_pattern": "28.*|29.*|38.*|39.*",
+          "description": "化学品注册、评估、授权和限制（Reg. 1907/2006）",
+          "mandatory": true,
+          "authority": "ECHA"
+        },
+        {
+          "cert_name": "RoHS",
+          "applies_to_hs_pattern": "84.*|85.*",
+          "description": "电子电气产品有害物质限制（指令 2011/65/EU）",
+          "mandatory": true,
+          "authority": "欧盟委员会"
+        },
+        {
+          "cert_name": "EU责任人(EAR)",
+          "applies_to_hs_pattern": ".*",
+          "description": "非欧盟制造商必须指定欧盟境内授权代表",
+          "mandatory": true,
+          "authority": ""
+        },
+        {
+          "cert_name": "数字产品护照(DPP)",
+          "applies_to_hs_pattern": "85.*|94.*",
+          "description": "2026年起部分产品强制要求数字产品护照",
+          "mandatory": false,
+          "authority": "欧盟委员会"
+        },
+        {
+          "cert_name": "新电池法规",
+          "applies_to_hs_pattern": "8507.*",
+          "description": "动力电池需提供碳足迹报告、电池护照",
+          "mandatory": true,
+          "authority": "欧盟委员会"
+        }
+      ],
+      "special_docs": [
+        {
+          "doc_name": "EORI号码",
+          "description": "进出口企业必须在欧盟注册EORI号码",
+          "mandatory": true
+        },
+        {
+          "doc_name": "CBAM碳排放申报",
+          "description": "2026年起钢铁、铝、水泥等产品需申报碳排放数据",
+          "mandatory": true
+        },
+        {
+          "doc_name": "进口商报关委托",
+          "description": "非欧盟企业需指定欧盟境内海关代理人",
+          "mandatory": true
+        }
+      ],
+      "notes": "欧盟共同对外关税(CET)0-25%，反倾销税叠加。CBAM碳关税2026年起实施。CE/UKCA认证需发货前完成。"
+    },
+    "JP": {
+      "country_code": "JP",
+      "country_name": "日本",
+      "mfn_rate": 4.0,
+      "additional_tariffs": [
+        {
+          "hs_pattern": ".*",
+          "rate": 0.0,
+          "reason": "RCEP下88%中国产品逐步享受零关税",
+          "effective_date": "2022-01-01"
+        }
+      ],
+      "anti_dumping": [
+        {
+          "hs_range": "7210.49|7212.30|7225.92|7226.99",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "调查中（2025年8月立案）",
+          "product": "热镀锌钢带和钢板"
+        }
+      ],
+      "vat": {
+        "standard_rate": 10.0,
+        "reduced_rate": 8.0,
+        "threshold": null,
+        "calculation_base": "CIF + 关税",
+        "currency": "JPY"
+      },
+      "required_certs": [
+        {
+          "cert_name": "PSE认证",
+          "applies_to_hs_pattern": "85.*|94.*",
+          "description": "电气产品强制安全认证（菱形PSE:116类高风险/圆形PSE:341类非特定）",
+          "mandatory": true,
+          "authority": "METI"
+        },
+        {
+          "cert_name": "METI备案",
+          "applies_to_hs_pattern": "8507.*",
+          "description": "2026年4月起锂电池PSE强制新规",
+          "mandatory": true,
+          "authority": "METI"
+        },
+        {
+          "cert_name": "TELEC认证",
+          "applies_to_hs_pattern": "8517.*|8525.*",
+          "description": "无线电设备认证",
+          "mandatory": true,
+          "authority": "MIC"
+        },
+        {
+          "cert_name": "JIS认证",
+          "applies_to_hs_pattern": ".*",
+          "description": "日本工业标准（非强制但提升竞争力）",
+          "mandatory": false,
+          "authority": "JSA"
+        },
+        {
+          "cert_name": "ST认证",
+          "applies_to_hs_pattern": "95.*",
+          "description": "玩具安全认证（事实门槛）",
+          "mandatory": false,
+          "authority": ""
+        }
+      ],
+      "special_docs": [
+        {
+          "doc_name": "日文标签",
+          "description": "技术文件及产品标签必须提供日文版本",
+          "mandatory": true
+        },
+        {
+          "doc_name": "日本进口商（日代）",
+          "description": "必须指定日本境内注册地址的国内管理人",
+          "mandatory": true
+        },
+        {
+          "doc_name": "RCEP原产地证",
+          "description": "享受RCEP优惠关税需提供原产地证明",
+          "mandatory": false
+        }
+      ],
+      "notes": "消费税标准税率10%（含国税7.8%+地方税2.2%）；低税率8%（食品饮料）。2026年起取消1万日元以下小额免税。"
+    },
+    "TH": {
+      "country_code": "TH",
+      "country_name": "泰国（东盟）",
+      "mfn_rate": 10.0,
+      "additional_tariffs": [
+        {
+          "hs_pattern": ".*",
+          "rate": 0.0,
+          "reason": "中国-东盟自贸区（ACFTA）下大部分产品零关税",
+          "effective_date": "2010-01-01"
+        }
+      ],
+      "anti_dumping": [
+        {
+          "hs_range": "3902.10.30",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "保障措施调查中（2025年9月立案）",
+          "product": "聚丙烯"
+        }
+      ],
+      "vat": {
+        "standard_rate": 7.0,
+        "reduced_rate": null,
+        "threshold": null,
+        "calculation_base": "CIF + 关税",
+        "currency": "THB"
+      },
+      "required_certs": [
+        {
+          "cert_name": "TISI认证",
+          "applies_to_hs_pattern": "85.*|94.*|84.*",
+          "description": "泰国工业标准研究院强制认证（电器、电子、建材等）",
+          "mandatory": true,
+          "authority": "TISI"
+        },
+        {
+          "cert_name": "泰国FDA认证",
+          "applies_to_hs_pattern": "30.*|21.*|33.*",
+          "description": "食品、药品、化妆品需泰国FDA批准",
+          "mandatory": true,
+          "authority": "Thai FDA"
+        },
+        {
+          "cert_name": "FORM E原产地证",
+          "applies_to_hs_pattern": ".*",
+          "description": "享受中国-东盟零关税优惠必需提供",
+          "mandatory": true,
+          "authority": "海关"
+        }
+      ],
+      "special_docs": [
+        {
+          "doc_name": "泰国本地代理",
+          "description": "外国制造商必须指定泰国注册公司作为授权代表",
+          "mandatory": true
+        },
+        {
+          "doc_name": "泰文标签",
+          "description": "产品说明书和标签必须包含泰文信息",
+          "mandatory": true
+        },
+        {
+          "doc_name": "Shopee/Lazada合规",
+          "description": "2026年1月1日起平台强制要求FDA/TISI认证",
+          "mandatory": true
+        }
+      ],
+      "notes": "2026年1月1日起取消1,500泰铢免税门槛，所有进口商品（≥1泰铢）均需缴纳关税+VAT。最低综合税负≈17%。"
+    },
+    "GB": {
+      "country_code": "GB",
+      "country_name": "英国",
+      "mfn_rate": 5.0,
+      "additional_tariffs": [],
+      "anti_dumping": [
+        {
+          "hs_range": "8429521000",
+          "country_applied": "CN",
+          "duty_rate": 29.45,
+          "expiry_date": "2028-05-01",
+          "status": "终裁（2025年5月）+ 反吸收调查（2026年3月）",
+          "product": "挖掘机（18.81%-40.08%）"
+        },
+        {
+          "hs_range": "3924900010",
+          "country_applied": "CN",
+          "duty_rate": 30.2,
+          "expiry_date": "2029-10-01",
+          "status": "终裁",
+          "product": "熨衣板（18.1%-42.3%）"
+        },
+        {
+          "hs_range": "7010901000",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "双反调查中（2026年3月立案）",
+          "product": "玻璃容器"
+        },
+        {
+          "hs_range": "7325100031",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "过渡性审查（2026年5月）",
+          "product": "铸铁制品"
+        },
+        {
+          "hs_range": "2823 0000 10",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "调查中（2026年3月立案）",
+          "product": "金红石型二氧化钛"
+        },
+        {
+          "hs_range": "8427101010",
+          "country_applied": "CN",
+          "duty_rate": 0.0,
+          "expiry_date": "",
+          "status": "双反调查中（2025年12月立案）",
+          "product": "臂式升降机"
+        }
+      ],
+      "vat": {
+        "standard_rate": 20.0,
+        "reduced_rate": 5.0,
+        "threshold": null,
+        "calculation_base": "CIF + 关税",
+        "currency": "GBP"
+      },
+      "required_certs": [
+        {
+          "cert_name": "UKCA认证",
+          "applies_to_hs_pattern": "84.*|85.*|94.*|95.*",
+          "description": "替代CE标志，技术要求基本对齐",
+          "mandatory": true,
+          "authority": "UKAS"
+        },
+        {
+          "cert_name": "医疗器械CE/UKCA",
+          "applies_to_hs_pattern": "9018.*|9021.*|9022.*",
+          "description": "2025年7月1日起可选择CE或UKCA",
+          "mandatory": true,
+          "authority": "MHRA"
+        }
+      ],
+      "special_docs": [
+        {
+          "doc_name": "EORI号码",
+          "description": "英国进出口企业唯一标识（格式：GB+12位数字）",
+          "mandatory": true
+        },
+        {
+          "doc_name": "原产地证明（DCTS）",
+          "description": "用于申请发展中国家贸易计划优惠税率",
+          "mandatory": false
+        },
+        {
+          "doc_name": "Postponed VAT Accounting",
+          "description": "可选择进口时递延缴纳VAT",
+          "mandatory": false
+        }
+      ],
+      "notes": "UK Global Tariff（UKGT）脱欧后独立关税体系。原£15以下免税已取消。小额豁免已取消。"
+    }
+  }
+}
