@@ -9,7 +9,7 @@ import axios from "axios";
 import { getToken, clearAuth } from "./authApi";
 
 const client = axios.create({
-  baseURL: "/api",
+  baseURL: "https://data-pipeline-mu.vercel.app",
   timeout: 30_000,
   headers: { "Content-Type": "application/json" },
 });
