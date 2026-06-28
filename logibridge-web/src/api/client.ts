@@ -2,7 +2,7 @@ import axios from "axios";
 import { getToken, clearAuth } from "./authApi";
 
 const client = axios.create({
-  baseURL: "https://data-pipeline-sigma.vercel.app",
+  baseURL: "/api",
   timeout: 60_000,  // 60s 等待冷启动
   headers: { "Content-Type": "application/json" },
 });

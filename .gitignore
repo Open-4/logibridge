@@ -48,3 +48,5 @@ cert.pem
 *.db
 *.db-journal
 *.db-wal
+
+.vercel
