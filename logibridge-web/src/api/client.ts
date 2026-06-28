@@ -1,20 +1,12 @@
-/**
- * client.ts — Axios 实例 + 拦截器
- *
- * 请求拦截器：自动附带 Authorization: Bearer {token}
- * 响应拦截器：401 时自动清除认证信息并跳转到 /login
- */
-
 import axios from "axios";
 import { getToken, clearAuth } from "./authApi";
 
 const client = axios.create({
-  baseURL: "https://logibridge-api.znkfhyq.xyz",
-  timeout: 30_000,
+  baseURL: "https://data-pipeline-sigma.vercel.app",
+  timeout: 60_000,  // 60s 等待冷启动
   headers: { "Content-Type": "application/json" },
 });
 
-// ── 请求拦截器：自动附带 token ─────────────────────────────────────────
 client.interceptors.request.use((config) => {
   const token = getToken();
   if (token && config.headers) {
@@ -23,7 +15,6 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// ── 响应拦截器：401 时清除登录状态 ─────────────────────────────────────
 client.interceptors.response.use(
   (response) => response,
   (error) => {
