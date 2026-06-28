@@ -1453,8 +1453,6 @@ def delete_api_key(
 
 @app.get("/")
 def root():
-
-@app.get("/")
     return {
         "service": "LogiBridge API",
         "version": "1.0.0",
