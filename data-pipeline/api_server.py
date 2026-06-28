@@ -1464,41 +1464,6 @@ def delete_api_key(
 @app.get("/")
 def root():
 
-@app.get("/debug")
-def debug_info():
-    """诊断端点：返回认证系统的调试信息"""
-    import os, json
-    log_file = "/tmp/auth_debug.log"
-    store_file = "/tmp/logibridge_store.json"
-
-    result = {
-        "tmp_exists": os.path.exists("/tmp"),
-        "tmp_writable": os.access("/tmp", os.W_OK),
-        "store_exists": os.path.exists(store_file),
-        "store_content": None,
-        "log_exists": os.path.exists(log_file),
-        "log_tail": [],
-    }
-    if result["store_exists"]:
-        try:
-            with open(store_file) as f:
-                data = json.load(f)
-            result["store_content"] = {
-                "users_count": len(data.get("users", {})),
-                "emails": list(data.get("users_by_email", {}).keys()),
-            }
-        except Exception as e:
-            result["store_content"] = {"error": str(e)}
-    if result["log_exists"]:
-        try:
-            with open(log_file) as f:
-                lines = f.readlines()
-            result["log_tail"] = [l.strip() for l in lines[-20:]]
-        except Exception as e:
-            result["log_tail"] = [str(e)]
-
-    return result
-
 @app.get("/")
     return {
         "service": "LogiBridge API",
