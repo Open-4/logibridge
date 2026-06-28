@@ -1,8 +1,8 @@
 """
-auth.py — PostgreSQL 持久化认证（Railway Postgres + Vercel Serverless）
-- 用 Railway Postgres 存储用户、设置、API Key
+auth.py — Turso 边缘数据库持久化认证（适配 Vercel Serverless）
+- Turso 是免费 SQLite 边缘数据库，全球分布
 - JWT 签发/验证
-- 内存后备（数据库不可用时）
+- 内存后备
 """
 from __future__ import annotations
 
@@ -25,8 +25,9 @@ SECRET_KEY = os.getenv(
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
-# ── 数据库配置 ──────────────────────────────────────────────────────────
-_DATABASE_URL = os.getenv("DATABASE_URL", "")
+# ── Turso 数据库 ─────────────────────────────────────────────────────────
+_TURSO_URL = os.getenv("TURSO_DATABASE_URL", "")
+_TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "")
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -67,65 +68,55 @@ DEFAULT_USER_SETTINGS = {
 def _now_iso(): return datetime.now(timezone.utc).isoformat()
 def _new_id(): return uuid.uuid4().hex[:12]
 
-# ── PostgreSQL 连接 ─────────────────────────────────────────────────────
+# ── Turso 连接 ──────────────────────────────────────────────────────────
 
-_db_conn = None
+_turso_client = None
 _DB_ENABLED = False
 
 def _get_db():
-    global _db_conn, _DB_ENABLED
-    if not _DATABASE_URL:
+    global _turso_client, _DB_ENABLED
+    if not _TURSO_URL or not _TURSO_TOKEN:
         _DB_ENABLED = False
         return None
     try:
-        if _db_conn is None or _db_conn.closed:
-            import psycopg2
-            _db_conn = psycopg2.connect(_DATABASE_URL)
-            _db_conn.autocommit = True
+        if _turso_client is None:
+            import libsql_client
+            _turso_client = libsql_client.create_client_sync(
+                url=_TURSO_URL,
+                auth_token=_TURSO_TOKEN,
+            )
+            # 初始化表
+            _turso_client.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    hashed_password TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            _turso_client.execute("""
+                CREATE TABLE IF NOT EXISTS user_settings (
+                    user_id TEXT PRIMARY KEY,
+                    settings_json TEXT NOT NULL DEFAULT '{}'
+                )
+            """)
+            _turso_client.execute("""
+                CREATE TABLE IF NOT EXISTS api_keys (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    name TEXT NOT NULL DEFAULT '',
+                    key_value TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
             _DB_ENABLED = True
-        return _db_conn
+            print("[auth] Turso 数据库已连接")
+        return _turso_client
     except Exception as e:
         _DB_ENABLED = False
-        print(f"[auth] PostgreSQL 连接失败 (回退内存): {e}")
+        print(f"[auth] Turso 连接失败 (回退内存): {e}")
         return None
-
-def _init_db():
-    db = _get_db()
-    if not db:
-        return
-    try:
-        cur = db.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                hashed_password TEXT NOT NULL,
-                name TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS user_settings (
-                user_id TEXT PRIMARY KEY,
-                settings_json TEXT NOT NULL DEFAULT '{}'
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS api_keys (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                name TEXT NOT NULL DEFAULT '',
-                key_value TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-        """)
-        cur.close()
-        print("[auth] PostgreSQL 数据库表已就绪")
-    except Exception as e:
-        print(f"[auth] 数据库初始化失败: {e}")
-
-# 模块加载时初始化
-_init_db()
 
 # ── 内存后备 ────────────────────────────────────────────────────────────
 _MEMORY_USERS: dict[str, dict] = {}
@@ -192,35 +183,25 @@ def get_user_by_email(email: str) -> Optional[dict]:
     db = _get_db()
     if db:
         try:
-            cur = db.cursor()
-            cur.execute("SELECT id, email, hashed_password, name, created_at FROM users WHERE email = %s", (email_norm,))
-            row = cur.fetchone()
-            cur.close()
-            if row:
-                return {"id": row[0], "email": row[1], "hashed_password": row[2], "name": row[3], "createdAt": row[4]}
+            rs = db.execute("SELECT id, email, hashed_password, name, created_at FROM users WHERE email = ?", [email_norm])
+            if rs.rows:
+                r = rs.rows[0]
+                return {"id": r[0], "email": r[1], "hashed_password": r[2], "name": r[3], "createdAt": r[4]}
         except Exception:
             pass
     return _MEMORY_USERS_BY_EMAIL.get(email_norm)
 
 def create_user(email: str, password: str, name: str) -> dict:
-    now = _now_iso()
-    uid = _new_id()
+    now = _now_iso(); uid = _new_id()
     email_norm = email.lower().strip()
     hashed = hash_password(password)
     user = {"id": uid, "email": email_norm, "hashed_password": hashed, "name": name.strip(), "createdAt": now}
-
     db = _get_db()
     if db:
         try:
-            cur = db.cursor()
-            cur.execute(
-                "INSERT INTO users (id, email, hashed_password, name, created_at) VALUES (%s, %s, %s, %s, %s)",
-                (uid, email_norm, hashed, name.strip(), now),
-            )
-            cur.close()
+            db.execute("INSERT INTO users (id, email, hashed_password, name, created_at) VALUES (?, ?, ?, ?, ?)", [uid, email_norm, hashed, name.strip(), now])
         except Exception:
             pass
-
     _MEMORY_USERS[uid] = user
     _MEMORY_USERS_BY_EMAIL[email_norm] = user
     return user
@@ -240,12 +221,9 @@ def get_user_settings(user_id: str) -> dict:
     db = _get_db()
     if db:
         try:
-            cur = db.cursor()
-            cur.execute("SELECT settings_json FROM user_settings WHERE user_id = %s", (user_id,))
-            row = cur.fetchone()
-            cur.close()
-            if row:
-                settings = json.loads(row[0])
+            rs = db.execute("SELECT settings_json FROM user_settings WHERE user_id = ?", [user_id])
+            if rs.rows:
+                settings = json.loads(rs.rows[0][0])
                 return {**DEFAULT_USER_SETTINGS, **settings}
         except Exception:
             pass
@@ -259,12 +237,7 @@ def update_user_settings(user_id: str, updates: dict) -> dict:
     db = _get_db()
     if db:
         try:
-            cur = db.cursor()
-            cur.execute(
-                "INSERT INTO user_settings (user_id, settings_json) VALUES (%s, %s) ON CONFLICT (user_id) DO UPDATE SET settings_json = EXCLUDED.settings_json",
-                (user_id, json.dumps(current, ensure_ascii=False)),
-            )
-            cur.close()
+            db.execute("INSERT OR REPLACE INTO user_settings (user_id, settings_json) VALUES (?, ?)", [user_id, json.dumps(current, ensure_ascii=False)])
         except Exception:
             pass
     _MEMORY_SETTINGS[user_id] = current
@@ -274,17 +247,11 @@ def update_user_settings(user_id: str, updates: dict) -> dict:
 
 def create_api_key_for_user(user_id: str, name: str = "") -> dict:
     key_id = _new_id(); key_value = f"lgb_{uuid.uuid4().hex}"; now = _now_iso()
-    ak = {"id": key_id, "userId": user_id, "name": name.strip() or f"API Key {key_id[:8]}",
-          "key": key_value, "createdAt": now, "lastUsedAt": None}
+    ak = {"id": key_id, "userId": user_id, "name": name.strip() or f"API Key {key_id[:8]}", "key": key_value, "createdAt": now, "lastUsedAt": None}
     db = _get_db()
     if db:
         try:
-            cur = db.cursor()
-            cur.execute(
-                "INSERT INTO api_keys (id, user_id, name, key_value, created_at) VALUES (%s, %s, %s, %s, %s)",
-                (key_id, user_id, ak["name"], key_value, now),
-            )
-            cur.close()
+            db.execute("INSERT INTO api_keys (id, user_id, name, key_value, created_at) VALUES (?, ?, ?, ?, ?)", [key_id, user_id, ak["name"], key_value, now])
         except Exception:
             pass
     _MEMORY_API_KEYS.setdefault(user_id, []).append(ak)
@@ -294,11 +261,8 @@ def list_api_keys_for_user(user_id: str) -> list[dict]:
     db = _get_db()
     if db:
         try:
-            cur = db.cursor()
-            cur.execute("SELECT id, user_id, name, key_value, created_at FROM api_keys WHERE user_id = %s", (user_id,))
-            rows = cur.fetchall()
-            cur.close()
-            return [{"id": r[0], "userId": r[1], "name": r[2], "key": r[3][:12]+"...", "createdAt": r[4], "lastUsedAt": None} for r in rows]
+            rs = db.execute("SELECT id, user_id, name, key_value, created_at FROM api_keys WHERE user_id = ?", [user_id])
+            return [{"id": r[0], "userId": r[1], "name": r[2], "key": r[3][:12]+"...", "createdAt": r[4], "lastUsedAt": None} for r in rs.rows]
         except Exception:
             pass
     return [dict(k, key=k["key"][:12]+"...") for k in _MEMORY_API_KEYS.get(user_id, [])]
@@ -307,11 +271,8 @@ def delete_api_key_for_user(user_id: str, key_id: str) -> bool:
     db = _get_db()
     if db:
         try:
-            cur = db.cursor()
-            cur.execute("DELETE FROM api_keys WHERE id = %s AND user_id = %s", (key_id, user_id))
-            deleted = cur.rowcount > 0
-            cur.close()
-            if deleted: return True
+            rs = db.execute("DELETE FROM api_keys WHERE id = ? AND user_id = ?", [key_id, user_id])
+            return rs.rows_affected > 0
         except Exception:
             pass
     keys = _MEMORY_API_KEYS.get(user_id, [])
