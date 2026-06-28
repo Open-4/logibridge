@@ -6,12 +6,5 @@
       "entrypoint": "api_server:app",
       "framework": "fastapi"
     }
-  },
-  "experimentalServices": {
-    "logibridge-api": {
-      "type": "web",
-      "routePrefix": "/",
-      "buildCommand": "pip install -r requirements.txt"
-    }
   }
 }
