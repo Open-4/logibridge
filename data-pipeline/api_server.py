@@ -1355,7 +1355,12 @@ def register(req: UserCreate):
 
     # 创建用户
     user = create_user(email=req.email, password=req.password, name=req.name)
-    token = create_access_token(data={"sub": user["id"]})
+    token = create_access_token(data={
+        "sub": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "createdAt": user["createdAt"],
+    })
 
     return TokenResponse(
         access_token=token,
@@ -1373,7 +1378,12 @@ def login(req: UserLogin):
             detail="邮箱或密码错误",
         )
 
-    token = create_access_token(data={"sub": user["id"]})
+    token = create_access_token(data={
+        "sub": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "createdAt": user["createdAt"],
+    })
     return TokenResponse(
         access_token=token,
         user=user_to_public(user),
