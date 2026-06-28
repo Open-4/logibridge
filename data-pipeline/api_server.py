@@ -1331,19 +1331,24 @@ def close_consultation(consultation_id: str):
 
 @app.post("/api/auth/register", status_code=201)
 def register(req: UserCreate):
-    """无状态注册：不查库，JWT 内嵌全部用户信息（含密码 hash）"""
+    """注册：存入数据库，返回 JWT"""
     # 密码长度校验
     if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="密码长度不能少于 6 位")
 
-    # 创建用户（无状态：不写数据库）
+    # 检查邮箱唯一性
+    from auth import get_user_by_email
+    existing = get_user_by_email(req.email)
+    if existing:
+        raise HTTPException(status_code=409, detail="该邮箱已被注册")
+
+    # 创建用户并存入数据库
     user = create_user(email=req.email, password=req.password, name=req.name)
     token = create_access_token(data={
         "sub": user["id"],
         "email": user["email"],
         "name": user["name"],
         "createdAt": user["createdAt"],
-        "hash": user["hashed_password"],
     })
 
     return TokenResponse(
@@ -1354,12 +1359,21 @@ def register(req: UserCreate):
 
 @app.post("/api/auth/login")
 def login(req: UserLogin):
-    """无状态登录：从 JWT 中验证密码，无需查库"""
-    from auth import hash_password, verify_password
-    # 从请求中的 Authorization header 或其他方式无法获取旧的 hash
-    # 无状态模式下，前端在登录时必须同时发送密码
-    # 我们用一个简单的机制：要求用户提供之前的 token 或重新注册
-    raise HTTPException(status_code=400, detail="请使用登录功能。如果忘记密码，请重新注册。")
+    """登录：查库验证邮箱密码，返回 JWT"""
+    from auth import authenticate_user
+    user = authenticate_user(email=req.email, password=req.password)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="邮箱或密码错误",
+        )
+
+    token = create_access_token(data={
+        "sub": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "createdAt": user["createdAt"],
+    })
     return TokenResponse(
         access_token=token,
         user=user_to_public(user),

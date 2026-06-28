@@ -1,8 +1,8 @@
 """
-auth.py — Stateless JWT 认证模块（适配 Vercel Serverless）
-- JWT 内嵌完整用户信息，无需查数据库
-- 密码用 JWT claims 中的 hash 验证
-- 无状态：不依赖文件系统或数据库
+auth.py — Turso SQLite 持久化认证（适配 Vercel Serverless）
+- 用 Turso 边缘数据库存储用户、设置、API Key
+- JWT 签发/验证
+- FastAPI 依赖项
 """
 from __future__ import annotations
 
@@ -25,7 +25,10 @@ SECRET_KEY = os.getenv(
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
-# ── Bearer token ───────────────────────────────────────────────────────
+# ── 数据库 ──────────────────────────────────────────────────────────────
+_DB_URL = os.getenv("TURSO_DATABASE_URL", "")
+_DB_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "")
+
 bearer_scheme = HTTPBearer(auto_error=False)
 
 # ── Pydantic 模型 ──────────────────────────────────────────────────────
@@ -65,7 +68,57 @@ DEFAULT_USER_SETTINGS = {
 def _now_iso(): return datetime.now(timezone.utc).isoformat()
 def _new_id(): return uuid.uuid4().hex[:12]
 
-# ── 密码（无状态：从 JWT hash 验证）────────────────────────────────────
+# ── 数据库操作 ──────────────────────────────────────────────────────────
+
+try:
+    import libsql_client
+    if _DB_URL and _DB_TOKEN:
+        _client = libsql_client.create_client_sync(
+            url=_DB_URL,
+            auth_token=_DB_TOKEN,
+        )
+        # 初始化表
+        _client.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                hashed_password TEXT NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        _client.execute("""
+            CREATE TABLE IF NOT EXISTS user_settings (
+                user_id TEXT PRIMARY KEY,
+                settings_json TEXT NOT NULL DEFAULT '{}',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        _client.execute("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                key_value TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        _DB_ENABLED = True
+    else:
+        _client = None
+        _DB_ENABLED = False
+except ImportError:
+    _client = None
+    _DB_ENABLED = False
+
+# ── 内存后备 ────────────────────────────────────────────────────────────
+_MEMORY_USERS: dict[str, dict] = {}
+_MEMORY_USERS_BY_EMAIL: dict[str, dict] = {}
+_MEMORY_SETTINGS: dict[str, dict] = {}
+_MEMORY_API_KEYS: dict[str, list[dict]] = {}
+
+# ── 密码 ────────────────────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
     import bcrypt
@@ -78,7 +131,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     except Exception:
         return False
 
-# ── JWT（无状态：JWT 内嵌所有用户数据）─────────────────────────────────
+# ── JWT ─────────────────────────────────────────────────────────────────
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
@@ -93,7 +146,7 @@ def decode_access_token(token: str) -> dict:
                             detail="Token 无效或已过期",
                             headers={"WWW-Authenticate": "Bearer"})
 
-# ── 依赖项（从 JWT 中直接提取用户，不查库）───────────────────────────
+# ── 依赖项 ─────────────────────────────────────────────────────────────
 
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
@@ -118,59 +171,120 @@ async def get_current_user_required(
                             detail="请先登录", headers={"WWW-Authenticate": "Bearer"})
     return current_user
 
-# ── 用户注册（无状态：仅生成 JWT）─────────────────────────────────────
+# ── 用户 CRUD ──────────────────────────────────────────────────────────
+
+def get_user_by_email(email: str) -> Optional[dict]:
+    email_norm = email.lower().strip()
+    if _DB_ENABLED:
+        try:
+            rs = _client.execute(
+                "SELECT * FROM users WHERE email = ?", [email_norm]
+            )
+            if rs.rows:
+                r = rs.rows[0]
+                return {"id": r[0], "email": r[1], "hashed_password": r[2], "name": r[3], "createdAt": r[4]}
+        except Exception:
+            pass
+    return _MEMORY_USERS_BY_EMAIL.get(email_norm)
 
 def create_user(email: str, password: str, name: str) -> dict:
     now = _now_iso()
     uid = _new_id()
-    return {
-        "id": uid,
-        "email": email.lower().strip(),
-        "hashed_password": hash_password(password),
-        "name": name.strip(),
-        "createdAt": now,
-    }
+    email_norm = email.lower().strip()
+    hashed = hash_password(password)
+    user = {"id": uid, "email": email_norm, "hashed_password": hashed, "name": name.strip(), "createdAt": now}
 
-def authenticate_user_by_hash(email: str, password: str, stored_hash: str) -> Optional[dict]:
-    """用 JWT 中存储的 hash 验证密码（无状态登录）"""
-    if not verify_password(password, stored_hash):
-        return None
-    return True  # 返回 True 表示验证通过
+    if _DB_ENABLED:
+        try:
+            _client.execute(
+                "INSERT INTO users (id, email, hashed_password, name, created_at) VALUES (?, ?, ?, ?, ?)",
+                [uid, email_norm, hashed, name.strip(), now],
+            )
+        except Exception:
+            pass
+
+    _MEMORY_USERS[uid] = user
+    _MEMORY_USERS_BY_EMAIL[email_norm] = user
+    return user
+
+def authenticate_user(email: str, password: str) -> Optional[dict]:
+    user = get_user_by_email(email)
+    if not user: return None
+    if not verify_password(password, user["hashed_password"]): return None
+    return user
 
 def user_to_public(user: dict) -> UserPublic:
     return UserPublic(id=user["id"], email=user["email"], name=user["name"], createdAt=user["createdAt"])
 
-# ── 用户设置（内存中，可后续扩展存储）─────────────────────────────────
-
-_user_settings: dict[str, dict] = {}
+# ── 用户设置 ────────────────────────────────────────────────────────────
 
 def get_user_settings(user_id: str) -> dict:
-    settings = _user_settings.get(user_id)
+    if _DB_ENABLED:
+        try:
+            rs = _client.execute("SELECT settings_json FROM user_settings WHERE user_id = ?", [user_id])
+            if rs.rows:
+                settings = json.loads(rs.rows[0][0])
+                return {**DEFAULT_USER_SETTINGS, **settings}
+        except Exception:
+            pass
+    settings = _MEMORY_SETTINGS.get(user_id)
     return {**DEFAULT_USER_SETTINGS, **settings} if settings else dict(DEFAULT_USER_SETTINGS)
 
 def update_user_settings(user_id: str, updates: dict) -> dict:
     current = get_user_settings(user_id)
     for k, v in updates.items():
         if v is not None and k in DEFAULT_USER_SETTINGS: current[k] = v
-    _user_settings[user_id] = current
+    if _DB_ENABLED:
+        try:
+            _client.execute(
+                "INSERT OR REPLACE INTO user_settings (user_id, settings_json) VALUES (?, ?)",
+                [user_id, json.dumps(current, ensure_ascii=False)],
+            )
+        except Exception:
+            pass
+    _MEMORY_SETTINGS[user_id] = current
     return current
 
-# ── API Key（内存中，可后续扩展存储）──────────────────────────────────
-
-_user_api_keys: dict[str, list[dict]] = {}
+# ── API Key ─────────────────────────────────────────────────────────────
 
 def create_api_key_for_user(user_id: str, name: str = "") -> dict:
     key_id = _new_id(); key_value = f"lgb_{uuid.uuid4().hex}"; now = _now_iso()
     ak = {"id": key_id, "userId": user_id, "name": name.strip() or f"API Key {key_id[:8]}",
           "key": key_value, "createdAt": now, "lastUsedAt": None}
-    _user_api_keys.setdefault(user_id, []).append(ak)
+    if _DB_ENABLED:
+        try:
+            _client.execute(
+                "INSERT INTO api_keys (id, user_id, name, key_value, created_at) VALUES (?, ?, ?, ?, ?)",
+                [key_id, user_id, ak["name"], key_value, now],
+            )
+        except Exception:
+            pass
+    _MEMORY_API_KEYS.setdefault(user_id, []).append(ak)
     return ak
 
 def list_api_keys_for_user(user_id: str) -> list[dict]:
-    return [dict(k, key=k["key"][:12]+"...") for k in _user_api_keys.get(user_id, [])]
+    if _DB_ENABLED:
+        try:
+            rs = _client.execute("SELECT id, user_id, name, key_value, created_at FROM api_keys WHERE user_id = ?", [user_id])
+            return [{"id": r[0], "userId": r[1], "name": r[2], "key": r[3][:12]+"...", "createdAt": r[4], "lastUsedAt": None} for r in rs.rows]
+        except Exception:
+            pass
+    return [dict(k, key=k["key"][:12]+"...") for k in _MEMORY_API_KEYS.get(user_id, [])]
 
 def delete_api_key_for_user(user_id: str, key_id: str) -> bool:
-    keys = _user_api_keys.get(user_id, [])
+    if _DB_ENABLED:
+        try:
+            rs = _client.execute("DELETE FROM api_keys WHERE id = ? AND user_id = ?", [key_id, user_id])
+            return rs.rows_affected > 0
+        except Exception:
+            pass
+    keys = _MEMORY_API_KEYS.get(user_id, [])
     for i, k in enumerate(keys):
         if k["id"] == key_id: keys.pop(i); return True
     return False
+
+# ── 初始化 ──────────────────────────────────────────────────────────────
+if _DB_ENABLED:
+    print(f"[auth] Turso 数据库已连接，持久化已启用")
+else:
+    print(f"[auth] 无外部数据库，使用内存存储（数据在冷启动时丢失）")
