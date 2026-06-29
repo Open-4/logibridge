@@ -1,8 +1,11 @@
 {
   "builds": [
     {
-      "src": "logibridge-web/dist/**",
-      "use": "@vercel/static"
+      "src": "logibridge-web/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "logibridge-web/dist"
+      }
     },
     {
       "src": "data-pipeline/api.py",
@@ -23,14 +26,18 @@
       "dest": "/logibridge-web/dist/favicon.svg"
     },
     {
+      "src": "/icons.svg",
+      "dest": "/logibridge-web/dist/icons.svg"
+    },
+    {
+      "src": "/data/(.*)",
+      "dest": "/logibridge-web/dist/data/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/logibridge-web/dist/$1"
     }
   ],
-  "outputDirectory": "logibridge-web/dist",
-  "github": {
-    "silent": true
-  },
   "functions": {
     "data-pipeline/api.py": {
       "runtime": "vercel-python@3.11"
