@@ -1,8 +1,10 @@
 import axios from "axios";
 import { getToken, clearAuth } from "./authApi";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
+
 const client = axios.create({
-  baseURL: "/api",
+  baseURL: API_BASE,
   timeout: 60_000,  // 60s 等待冷启动
   headers: { "Content-Type": "application/json" },
 });

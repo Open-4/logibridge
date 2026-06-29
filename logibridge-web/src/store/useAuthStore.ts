@@ -40,14 +40,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email, password) => {
     const res = await loginApi({ email, password });
     saveAuth(res.access_token, res.user);
-    set({ user: res.user, token: res.access_token });
+    set({ user: res.user, token: res.access_token, loading: false });
   },
 
   // ── 注册 ───────────────────────────────────────────────────────────
   register: async (email, password, name) => {
     const res = await registerApi({ email, password, name });
     saveAuth(res.access_token, res.user);
-    set({ user: res.user, token: res.access_token });
+    set({ user: res.user, token: res.access_token, loading: false });
   },
 
   // ── 登出 ───────────────────────────────────────────────────────────

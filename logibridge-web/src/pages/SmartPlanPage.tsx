@@ -165,6 +165,64 @@ function getTransitPorts(originCode: string, destCode: string): string[] {
   return [];
 }
 
+/** 港口坐标硬编码 fallback（当 /data/ports.json 加载失败时使用） */
+const PORT_COORDS_FALLBACK: Record<string, [number, number]> = {
+  CNSHA: [121.47, 31.23],
+  CNSGH: [121.48, 31.23],
+  CNNGB: [121.88, 29.88],
+  CNHKG: [114.17, 22.32],
+  KRPUS: [129.05, 35.13],
+  JPYOK: [139.65, 35.45],
+  SGSIN: [103.85, 1.28],
+  USLAX: [-118.24, 33.74],
+  USNYC: [-74.01, 40.71],
+  USSEA: [-122.33, 47.60],
+  NLRTM: [4.50, 51.90],
+  DEHAM: [9.99, 53.55],
+  AEFJR: [55.37, 25.12],
+  AEQWE: [55.05, 25.00],
+  AUSYD: [151.20, -33.85],
+  THLCH: [100.88, 13.07],
+  MYPKG: [101.40, 3.00],
+  MYTPP: [103.55, 1.37],
+  VNHCM: [106.70, 10.77],
+  INNSA: [72.85, 18.94],
+  ZADUR: [31.02, -29.85],
+  CAVAN: [-123.12, 49.28],
+  MXVER: [-96.13, 19.20],
+  USLGB: [-118.19, 33.76],
+  USSAV: [-81.15, 32.07],
+  CAVAN: [-123.12, 49.28],
+};
+
+const PORT_NAMES_FALLBACK: Record<string, string> = {
+  CNSHA: "上海港",
+  CNSGH: "上海洋山港",
+  CNNGB: "宁波舟山港",
+  CNHKG: "香港港",
+  KRPUS: "釜山港",
+  JPYOK: "横滨港",
+  SGSIN: "新加坡港",
+  USLAX: "洛杉矶港",
+  USNYC: "纽约港",
+  USSEA: "西雅图港",
+  NLRTM: "鹿特丹港",
+  DEHAM: "汉堡港",
+  AEFJR: "富查伊拉港",
+  AEQWE: "杰贝阿里港",
+  AUSYD: "悉尼港",
+  THLCH: "林查班港",
+  MYPKG: "巴生港",
+  MYTPP: "丹戎帕拉帕斯港",
+  VNHCM: "胡志明港",
+  INNSA: "孟买港",
+  ZADUR: "德班港",
+  CAVAN: "温哥华港",
+  MXVER: "韦拉克鲁斯港",
+  USLGB: "长滩港",
+  USSAV: "萨凡纳港",
+};
+
 /** 港口坐标映射表 — 挂载时从 /data/ports.json 加载 */
 let portCoordCache: Record<string, [number, number]> = {};
 let portNameCache: Record<string, string> = {};
@@ -180,7 +238,10 @@ async function loadPortsCache() {
       portNameCache[p.code] = p.name;
     }
   } catch {
-    console.warn("⚠️ ports.json 加载失败");
+    console.warn("⚠️ ports.json 加载失败，使用硬编码坐标 fallback");
+    // 降级：使用内置的常用港口坐标
+    Object.assign(portCoordCache, PORT_COORDS_FALLBACK);
+    Object.assign(portNameCache, PORT_NAMES_FALLBACK);
   }
 }
 

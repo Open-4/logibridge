@@ -19,6 +19,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+# ── 确保能导入同级模块 ──────────────────────────────────────────────
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from auth import (
     UserCreate,
     UserLogin,
@@ -38,9 +41,6 @@ from auth import (
     list_api_keys_for_user,
     delete_api_key_for_user,
 )
-
-# ── 确保能导入同级模块 ──────────────────────────────────────────────
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from freight_estimator import estimate_freight
 from tracking_models import (
     Shipment,

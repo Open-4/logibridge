@@ -151,7 +151,7 @@ const RegisterForm: React.FC = () => {
         name="password"
         rules={[
           { required: true, message: "请输入密码" },
-          { min: 8, message: "密码长度不能少于 8 位" },
+          { min: 6, message: "密码长度不能少于 6 位" },
         ]}
       >
         <Input.Password

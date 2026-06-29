@@ -1,6 +1,8 @@
 /**
- * authApi.ts — 纯前端认证（localStorage）
- * 用于 Vercel 静态部署，无需后端 API
+ * authApi.ts — 真实后端认证 API 调用
+ *
+ * 通过 /api/auth/* 端点与 FastAPI 后端通信，使用 JWT 令牌。
+ * Token 和 user 信息缓存在 localStorage 中以保持登录状态。
  */
 import client from "./client";
 
@@ -31,68 +33,8 @@ export interface TokenResponse {
 /** localStorage keys */
 const TOKEN_KEY = "logibridge_token";
 const USER_KEY = "logibridge_user";
-const USERS_KEY = "logibridge_users";  // 所有注册用户
 
-/** 从 localStorage 读取用户列表 */
-function getUsers(): Record<string, { email: string; password: string; name: string; id: string; createdAt: string }> {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveUsers(users: Record<string, any>) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-export async function registerApi(data: RegisterRequest): Promise<TokenResponse> {
-  const users = getUsers();
-  
-  if (users[data.email.toLowerCase()]) {
-    throw { response: { status: 409, data: { detail: "该邮箱已被注册" } } };
-  }
-  
-  if (data.password.length < 6) {
-    throw { response: { status: 400, data: { detail: "密码长度不能少于 6 位" } } };
-  }
-  
-  const id = Math.random().toString(36).slice(2, 14);
-  const now = new Date().toISOString();
-  
-  users[data.email.toLowerCase()] = {
-    id, email: data.email, password: data.password, name: data.name, createdAt: now
-  };
-  saveUsers(users);
-  
-  const user: UserPublic = { id, email: data.email, name: data.name, createdAt: now };
-  const token = "tok_" + id;
-  
-  saveAuth(token, user);
-  return { access_token: token, token_type: "bearer", user };
-}
-
-export async function loginApi(data: LoginRequest): Promise<TokenResponse> {
-  const users = getUsers();
-  const stored = users[data.email.toLowerCase()];
-  
-  if (!stored || stored.password !== data.password) {
-    throw { response: { status: 401, data: { detail: "邮箱或密码错误" } } };
-  }
-  
-  const user: UserPublic = { id: stored.id, email: stored.email, name: stored.name, createdAt: stored.createdAt };
-  const token = "tok_" + stored.id;
-  
-  saveAuth(token, user);
-  return { access_token: token, token_type: "bearer", user };
-}
-
-export async function getMeApi(): Promise<UserPublic> {
-  const user = getStoredUser();
-  if (!user) throw { response: { status: 401 } };
-  return user;
-}
+// ── 持久化 ────────────────────────────────────────────────────────
 
 export function saveAuth(token: string, user: UserPublic) {
   localStorage.setItem(TOKEN_KEY, token);
@@ -119,4 +61,31 @@ export function getStoredUser(): UserPublic | null {
 
 export function isAuthenticated(): boolean {
   return !!getToken();
+}
+
+// ── API 调用 ──────────────────────────────────────────────────────
+
+/** POST /api/auth/register — 注册新用户 */
+export async function registerApi(data: RegisterRequest): Promise<TokenResponse> {
+  const { data: res } = await client.post<TokenResponse>("/api/auth/register", {
+    email: data.email.toLowerCase().trim(),
+    password: data.password,
+    name: data.name.trim(),
+  });
+  return res;
+}
+
+/** POST /api/auth/login — 登录 */
+export async function loginApi(data: LoginRequest): Promise<TokenResponse> {
+  const { data: res } = await client.post<TokenResponse>("/api/auth/login", {
+    email: data.email.toLowerCase().trim(),
+    password: data.password,
+  });
+  return res;
+}
+
+/** GET /api/auth/me — 获取当前用户信息（验证 token） */
+export async function getMeApi(): Promise<UserPublic> {
+  const { data } = await client.get<UserPublic>("/api/auth/me");
+  return data;
 }
