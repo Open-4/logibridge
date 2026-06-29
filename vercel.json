@@ -40,7 +40,7 @@
   ],
   "functions": {
     "data-pipeline/api.py": {
-      "runtime": "vercel-python@3.11"
+      "runtime": "vercel-python@3.12"
     }
   }
 }

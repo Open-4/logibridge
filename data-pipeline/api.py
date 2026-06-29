@@ -7,9 +7,11 @@ api.py — Vercel Serverless Function Entrypoint
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# 添加 backend/ 到 path，让 server.py 能找到 auth.py, freight_estimator.py 等
+_backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
+sys.path.insert(0, _backend_dir)
 
-from api_server import app  # noqa: E402
+from server import app  # noqa: E402
 
 try:
     from mangum import Mangum
